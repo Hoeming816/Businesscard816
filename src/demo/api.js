@@ -348,6 +348,15 @@ export async function listInteractions(contactId) {
     .sort((a, b) => b.occurred_on.localeCompare(a.occurred_on) || b.created_at.localeCompare(a.created_at))
     .map(clone);
 }
+export async function listWorkspaceInteractions(ws, limit = 500) {
+  await tick();
+  const seen = new Set(db.contacts.filter((c) => c.workspace_id === ws && visible(c)).map((c) => c.id));
+  return db.interactions
+    .filter((i) => seen.has(i.contact_id))
+    .sort((a, b) => b.occurred_on.localeCompare(a.occurred_on) || b.created_at.localeCompare(a.created_at))
+    .slice(0, limit)
+    .map(clone);
+}
 function bump(i) {
   if (i.kind === 'Note') return;
   const c = db.contacts.find((x) => x.id === i.contact_id);

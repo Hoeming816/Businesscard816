@@ -10,9 +10,9 @@ import CardCropper from './CardCropper.jsx';
 import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
 import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, SaveLabel, useJustSaved, formatDate, initials } from './ui.jsx';
 
-export default function ContactDetail({ contact, onClose }) {
+export default function ContactDetail({ contact, onClose, initialTab = 'details' }) {
   const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed } = useApp();
-  const [tab, setTab] = useState('details');
+  const [tab, setTab] = useState(initialTab);
   const [side, setSide] = useState('front');
   const [base, setBase] = useState(() => toDraft(contact)); // what editing started from
   const [draft, setDraft] = useState(base);

@@ -1011,3 +1011,23 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .rec-meta { flex-basis: 100%; display: block; color: var(--ink-2); font-weight: 600; }
 .rec-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-weight: 600; }
 .rec-meta .icon { vertical-align: -2px; margin-right: 4px; }
+
+/* ---------------------------------------------------------------- Home tabs + meeting minutes */
+.home { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.home-tabs .tab { flex: 1 1 0; justify-content: center; text-align: center; font-size: 15px; padding: 10px 14px; }
+@media (min-width: 720px) { .home-tabs .tab { flex: 0 0 auto; } }
+.minutes-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; max-width: 860px; }
+.minutes-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.minutes-row {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.minutes-row:hover:not(:disabled) { border-color: var(--accent); }
+.minutes-row:disabled { cursor: default; opacity: .7; }
+.minutes-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.minutes-row-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.minutes-row-head time { flex: none; color: var(--ink-3); }
+.minutes-row-who { color: var(--ink-2); font-weight: 600; }
+.minutes-row-text { color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.minutes-row-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.minutes-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font-size: 12px; }

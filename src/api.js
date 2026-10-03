@@ -387,6 +387,19 @@ export async function listInteractions(contactId) {
   return data || [];
 }
 
+/** Every note, meeting and recording the caller can see in a workspace, newest first. */
+export async function listWorkspaceInteractions(workspaceId, limit = 500) {
+  const { data, error } = await supabase
+    .from('interactions')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .order('occurred_on', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  fail(error);
+  return data || [];
+}
+
 export async function insertInteraction(row) {
   const { data, error } = await supabase.from('interactions').insert(row).select().single();
   fail(error);
