@@ -65,9 +65,14 @@ export async function requireCaller(req: Request): Promise<Caller> {
   return { id: user.id, client, profile };
 }
 
-// Refuses a feature a super admin has switched off for this user (unset = on).
+// Features that stay off until a super admin turns them on (src/features.js).
+const OFF_BY_DEFAULT = new Set(["meeting"]);
+
+// Refuses a feature that is off for this user. Super admins have everything.
 export function requireFeature(caller: Caller, feature: string, label: string) {
-  if (caller.profile.features?.[feature] === false) {
+  const set = caller.profile.features?.[feature];
+  const on = caller.profile.is_super_admin || (typeof set === "boolean" ? set : !OFF_BY_DEFAULT.has(feature));
+  if (!on) {
     throw new HttpError(403, `${label} is turned off for your account. Ask your super admin.`);
   }
 }

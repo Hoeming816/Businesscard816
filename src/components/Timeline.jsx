@@ -113,7 +113,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
           <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
             <Icon name="plus" size={16} /> Add meeting or note
           </button>
-          {can('recording') && (
+          {can('meeting') && (
             <button type="button" className="btn btn-outline" onClick={() => setEditing('record')}>
               <Icon name="mic" size={16} /> Record conversation
             </button>
@@ -148,7 +148,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
                 i={i}
                 author={i.created_by === uid ? 'You' : memberName(i.created_by)}
                 canEdit={canEditInteraction(i, contact, role, uid)}
-                canMakeMinutes={can('ai_minutes')}
+                canMakeMinutes={can('meeting')}
                 onEdit={() => setEditing(i)}
                 onDelete={() => remove(i)}
                 onDeleteRecording={() => removeRecording(i)}
@@ -246,7 +246,7 @@ function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteR
 
 function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, onAutoSaved }) {
   const { api, toast, upsertContact, can } = useApp();
-  const ai = can('ai_minutes');
+  const ai = can('meeting');
   const [lang, setLang] = useSpeechLanguage();
   const [f, setF] = useState(() => ({
     kind: existing?.kind || 'Meeting',
@@ -458,7 +458,7 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
               : recording.saved ? <span className="small rec-saved"><Icon name="check" size={14} /> Saved</span>
                 : <button type="button" className="btn btn-outline btn-sm" onClick={() => saveRecording(recording, f)}>Try saving again</button>}
           </div>
-        ) : can('recording') ? (
+        ) : can('meeting') ? (
           <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} autoStart={autoRecord} />
         ) : !existingAudio && <span className="muted small">Recording is turned off for your account.</span>}
         {recError && <p className="form-error" role="alert">{recError}</p>}

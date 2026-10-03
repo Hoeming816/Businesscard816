@@ -15,11 +15,14 @@ const TAB_ICONS = {
 const TAB_KEY = 'nomiqo.homeTab';
 const readTab = () => { try { return sessionStorage.getItem(TAB_KEY) || 'cards'; } catch { return 'cards'; } };
 
-/** The home screen: business cards and meeting minutes, one tab each. Opens on cards after sign-in. */
+/**
+ * The home screen. With Meeting on: Business Cards and Meeting Minutes tabs,
+ * opening on cards. Without it (the default): just the card list.
+ */
 export default function Home() {
   const { can } = useApp();
   const [stored, setTabRaw] = useState(readTab);
-  const showMinutes = can('minutes_tab');
+  const showMinutes = can('meeting');
   const tab = showMinutes ? stored : 'cards';
   if (!showMinutes) return <div className="home"><Contacts /></div>;
   const setTab = (v) => {

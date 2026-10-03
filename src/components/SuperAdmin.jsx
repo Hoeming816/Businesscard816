@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
 import { memberStatus } from './Team.jsx';
 import { Icon, Pill, Spinner, Tabs, formatDate } from './ui.jsx';
-import { FEATURES, featureOn } from '../features.js';
+import { FEATURES, featureDefault, featureOn } from '../features.js';
 
 export default function SuperAdmin() {
   const { api, toast } = useApp();
@@ -135,7 +135,7 @@ function Accounts({ profiles, reload, toast }) {
                       <button type="button" className="btn btn-outline btn-sm" disabled={busy}
                         aria-expanded={!!open && action.kind === 'features'}
                         onClick={() => setAction(open && action.kind === 'features' ? null : { id: p.id, kind: 'features' })}>
-                        <Icon name="sliders" size={14} /> Features{offCount(p) ? ` (${offCount(p)} off)` : ''}
+                        <Icon name="sliders" size={14} /> Features ({onCount(p)} of {FEATURES.length} on)
                       </button>
                       <button type="button" className="btn btn-ghost btn-sm" disabled={self || busy}
                         title={self ? 'Change your own password from Me' : undefined}
@@ -196,7 +196,7 @@ function Accounts({ profiles, reload, toast }) {
   );
 }
 
-const offCount = (p) => FEATURES.filter((f) => !featureOn(p, f.key)).length;
+const onCount = (p) => FEATURES.filter((f) => featureOn(p, f.key)).length;
 
 /** On/off switches for what one account can use. Each switch saves straight away. */
 function FeatureSwitches({ p, onSaved }) {
@@ -207,7 +207,7 @@ function FeatureSwitches({ p, onSaved }) {
   const toggle = async (key, on) => {
     const before = features;
     const next = { ...features };
-    if (on) delete next[key]; else next[key] = false;
+    if (on === featureDefault(key)) delete next[key]; else next[key] = on;
     setFeatures(next); // show the change straight away
     setSaving(key);
     try {
@@ -226,10 +226,10 @@ function FeatureSwitches({ p, onSaved }) {
     <fieldset className="feature-switches">
       <legend>Features for @{p.username}</legend>
       {FEATURES.map((f) => {
-        const on = features[f.key] !== false;
+        const on = featureOn({ ...p, features }, f.key);
         return (
           <label key={f.key} className="feature-switch">
-            <input type="checkbox" role="switch" checked={on} disabled={saving !== null} onChange={(e) => toggle(f.key, e.target.checked)} />
+            <input type="checkbox" role="switch" checked={on} disabled={saving !== null || p.is_super_admin} onChange={(e) => toggle(f.key, e.target.checked)} />
             <span>
               <strong>{f.label}</strong> {saving === f.key ? <span className="muted small">Saving…</span> : <span className={`small ${on ? 'feature-on' : 'feature-off'}`}>{on ? 'On' : 'Off'}</span>}
               <span className="help block">{f.help}</span>
@@ -237,7 +237,7 @@ function FeatureSwitches({ p, onSaved }) {
           </label>
         );
       })}
-      <p className="help">Changes take effect the next time they open the app. AI, sharing and recording are also blocked on the server when switched off.</p>
+      <p className="help">{p.is_super_admin ? 'Super admins always have every feature. ' : 'New accounts get Business Cards only; turn on Meeting to give them the Meeting Minutes tab. '}Changes take effect the next time they open the app, and are enforced on the server too.</p>
     </fieldset>
   );
 }

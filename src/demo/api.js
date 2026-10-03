@@ -5,6 +5,7 @@ import { PROFILES, WORKSPACES, MEMBERS, ME, buildContacts, buildHarbourContacts,
 import { cardSvg, demoAudioUrl } from './cardArt.js';
 import { todayISO, addDays } from '../filters.js';
 import { canEditContact, canDeleteContact, canEditInteraction } from '../perms.js';
+import { featureOn } from '../features.js';
 
 export const isDemo = true;
 export const isConfigured = true;
@@ -51,9 +52,9 @@ function roleIn(ws) {
 }
 const visible = (c) => roleIn(c.workspace_id) && c.created_by === uid(); // owner-only, as in 0004
 const profile = (id) => db.profiles.find((p) => p.id === id);
-// Mirrors the server: a feature a super admin switched off is refused.
+// Mirrors the server: a feature that is off for this account is refused.
 function needFeature(key, label) {
-  if (profile(uid())?.features?.[key] === false) throw new Error(`${label} is turned off for your account. Ask your super admin.`);
+  if (!featureOn(profile(uid()), key)) throw new Error(`${label} is turned off for your account. Ask your super admin.`);
 }
 
 export const usernameToEmail = (u) => `${u}@demo.cardfile.app`;
@@ -398,7 +399,7 @@ export async function deleteInteraction(interaction) {
   db.interactions = db.interactions.filter((x) => x.id !== i.id);
 }
 export async function uploadRecording(ws, contactId, interactionId, blob, ext) {
-  needFeature('recording', 'Recording');
+  needFeature('meeting', 'Meeting');
   await sleep(250);
   const path = `${ws}/${contactId}/${interactionId}-${Date.now()}.${ext}`; // the time in the name is when it was recorded
   db.blobs.set(path, URL.createObjectURL(blob));
@@ -411,14 +412,14 @@ export async function downloadRecording(path) {
   return (await fetch(url)).blob();
 }
 export async function transcribe() {
-  needFeature('ai_minutes', 'AI transcription and minutes');
+  needFeature('meeting', 'Meeting');
   await sleep(1500);
   return 'Thanks for making the time today. We are planning to refresh the network across our two Singapore sites next year. '
     + 'The main pain points are the ageing core switches and patchy Wi-Fi on the operations floor. '
     + 'We would like a proposal by the end of the month, and ideally a site survey before that.';
 }
 export async function summarise({ contact, today, notes, transcript }) {
-  needFeature('ai_minutes', 'AI transcription and minutes');
+  needFeature('meeting', 'Meeting');
   await sleep(1400);
   const t = today || todayISO();
   const next = { New: 'Contacted', Contacted: 'Qualified', Qualified: 'Proposal Sent', 'Proposal Sent': 'Negotiating' };

@@ -137,7 +137,7 @@ async function transcribe(form: FormData) {
 }
 
 serve(async (req) => {
-  requireFeature(await requireCaller(req), "ai_minutes", "AI transcription and minutes");
+  requireFeature(await requireCaller(req), "meeting", "Meeting");
   const type = req.headers.get("content-type") ?? "";
   if (type.includes("multipart/form-data")) {
     const form = await req.formData();
