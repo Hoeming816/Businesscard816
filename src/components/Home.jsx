@@ -30,7 +30,7 @@ export default function Home() {
         onChange={setTab}
         tabs={[
           { value: 'cards', label: 'Business Cards', ...TAB_ICONS.cards },
-          { value: 'minutes', label: 'Meeting Minutes', ...TAB_ICONS.minutes },
+          { value: 'minutes', label: 'Meeting', ...TAB_ICONS.minutes },
         ]}
       />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
