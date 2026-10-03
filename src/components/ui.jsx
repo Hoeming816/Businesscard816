@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import markUrl from '../assets/nomiqo-mark.png';
 
 // ---------------------------------------------------------------------------
 // Icons (inline SVG, 24px grid, stroke = currentColor)
@@ -67,25 +68,9 @@ export function Icon({ name, size = 18, className = '', strokeWidth = 1.8, title
 }
 
 export function Logo({ compact = false, byline = false, tagline = false }) {
-  const id = useId().replace(/:/g, '');
   return (
     <span className="logo">
-      <svg className="logo-mark" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
-        <defs>
-          <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#0d2558" /><stop offset="1" stopColor="#061230" />
-          </linearGradient>
-          <linearGradient id={`${id}b`} x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#2aa4ff" /><stop offset="1" stopColor="#1a63f0" />
-          </linearGradient>
-          <linearGradient id={`${id}g`} x1="0" y1="14" x2="0" y2="44" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#2ee6c4" /><stop offset="1" stopColor="#1c8ce6" />
-          </linearGradient>
-        </defs>
-        <rect width="64" height="64" rx="15" fill={`url(#${id}t)`} />
-        <path d="M45 19 V 42" stroke={`url(#${id}g)`} strokeWidth="12" strokeLinecap="round" />
-        <path d="M19 45 V 19 L 45 45" fill="none" stroke={`url(#${id}b)`} strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <img className="logo-mark" src={markUrl} width="30" height="30" alt="" />
       {!compact && (
         <span className="logo-text">
           <span className="logo-word">Nomi<span className="logo-flow">qo</span></span>
