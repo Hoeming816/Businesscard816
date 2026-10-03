@@ -3,7 +3,7 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import { isMinutes, meetingTimes, minutesColumns, minutesRow, normaliseMinutes, recordedAt, shareOrCopy, shareText } from '../minutes.js';
+import { clock, isMinutes, meetingTimes, minutesColumns, minutesRow, normaliseMinutes, recordedAt, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
@@ -129,12 +129,11 @@ export function useEntryActions({ reload, contactFor }) {
     }
     setStage('Writing minutes…');
     const t = meetingTimes(i);
-    const hm = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const ai = await api.meetingMinutes({
       title: i.title || '',
       meeting_type: i.meeting_type,
       date: i.occurred_on,
-      time: t ? `${hm(t.start)}–${hm(t.end)}` : '',
+      time: t ? `${clock(t.start)}–${clock(t.end)}` : '',
       notes: i.notes || '',
       transcript,
       contact: contact ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title } : {},

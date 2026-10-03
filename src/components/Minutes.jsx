@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
-import { isMinutes } from '../minutes.js';
+import { hasMinutes, isMinutes } from '../minutes.js';
+import { MEETING_TYPES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
 import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
+import MeetingView from './MeetingView.jsx';
 import { Icon, EmptyState, Spinner, ConfirmButton, formatDate, formatDuration } from './ui.jsx';
 
 const SHOW = [
@@ -43,16 +45,17 @@ export default function Minutes() {
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (items || []).filter((i) => {
-      if (show === 'minutes' && !isMinutes(i)) return false;
+      if (show === 'minutes' && !hasMinutes(i)) return false;
       if (show === 'recordings' && !i.audio_path) return false;
       if (!needle) return true;
       const c = byId.get(i.contact_id);
-      return [i.title, i.kind, i.notes, i.summary, c?.full_name, c?.company].some((v) => String(v || '').toLowerCase().includes(needle));
+      return [i.title, i.kind, i.meeting_type, i.notes, i.summary, i.transcript, i.minutes && JSON.stringify(i.minutes), c?.full_name, c?.company]
+        .some((v) => String(v || '').toLowerCase().includes(needle));
     });
   }, [items, show, q, byId]);
 
   const contact = open ? byId.get(open) : null;
-  const { making, makeMinutes, share, removeRecording, remove } = useEntryActions({ reload: load, contactFor: (i) => byId.get(i.contact_id) || null });
+  const { making, stage, makeMinutes, share, removeRecording, remove } = useEntryActions({ reload: load, contactFor: (i) => byId.get(i.contact_id) || null });
 
   return (
     <section className="minutes-page" aria-labelledby="minutes-title">
@@ -63,14 +66,19 @@ export default function Minutes() {
         </div>
         {can('meeting') && !recording && (
           <button type="button" className="btn btn-primary btn-lg record-meeting-btn" onClick={() => setRecording(true)}>
-            <Icon name="mic" size={18} /> Record meeting
+            <Icon name="plus" size={18} /> New Recording
           </button>
         )}
         {recording && (
           <MeetingRecorder
             contacts={contacts}
             onCancel={() => setRecording(false)}
-            onSaved={async (saved) => { setRecording(false); setShow('all'); setQ(''); await load(); setExpanded(saved.id); }}
+            onSaved={async (saved) => {
+              setRecording(false); setShow('all'); setQ('');
+              await load();
+              setExpanded(saved.id);
+              if (saved.meeting_type) makeMinutes(saved); // straight on to transcript and minutes
+            }}
           />
         )}
         <div className="toolbar">
@@ -90,7 +98,7 @@ export default function Minutes() {
       {error && <p className="notice notice-error" role="alert">{error}</p>}
       {items && !rows.length && !error && (
         <EmptyState icon="history" title={items.length ? 'Nothing matches' : 'No meeting minutes yet'}>
-          {items.length ? 'Try another search or show All.' : can('meeting') ? 'Tap Record meeting to record one. Notes you add to a contact appear here too.' : 'Notes and meetings you add to a contact appear here.'}
+          {items.length ? 'Try another search or show All.' : can('meeting') ? 'Tap New Recording to record one. Notes you add to a contact appear here too.' : 'Notes and meetings you add to a contact appear here.'}
         </EmptyState>
       )}
 
@@ -110,9 +118,11 @@ export default function Minutes() {
                   <span className="minutes-row-who small">{i.contact_id ? [c?.full_name, c?.company].filter(Boolean).join(' · ') || 'Contact not found' : 'No contact linked'}</span>
                   {text && !isOpen && <span className="minutes-row-text small">{text}</span>}
                   <span className="minutes-row-tags small">
-                    {isMinutes(i) && <span className="minutes-tag"><Icon name="sparkles" size={12} /> AI minutes</span>}
+                    {i.meeting_type && <span className="minutes-tag minutes-tag-type">{i.meeting_type}</span>}
+                    {hasMinutes(i) && <span className="minutes-tag"><Icon name="sparkles" size={12} /> AI minutes</span>}
+                    {making === i.id && <span className="minutes-tag"><Spinner /> {stage || 'Working…'}</span>}
                     {i.audio_path && <span className="minutes-tag"><Icon name="mic" size={12} /> Recording</span>}
-                    {!isMinutes(i) && <span className="minutes-tag">{i.kind}</span>}
+                    {!isMinutes(i) && !i.meeting_type && <span className="minutes-tag">{i.kind}</span>}
                   </span>
                 </button>
                 {!isOpen && canEditInteraction(i, c, role, uid) && (
@@ -128,7 +138,25 @@ export default function Minutes() {
                     </ConfirmButton>
                   </span>
                 )}
-                {isOpen && (
+                {isOpen && i.meeting_type && (
+                  <div className="minutes-open">
+                    <MeetingView
+                      i={i}
+                      contact={c}
+                      canEdit={canEditInteraction(i, c, role, uid)}
+                      canMakeMinutes={can('meeting')}
+                      making={making === i.id}
+                      stage={stage}
+                      busy={making !== null}
+                      onMakeMinutes={() => makeMinutes(i)}
+                      onShare={() => share(i)}
+                      onDelete={() => { setExpanded(null); remove(i); }}
+                      onDeleteRecording={() => removeRecording(i)}
+                      onChanged={load}
+                    />
+                  </div>
+                )}
+                {isOpen && !i.meeting_type && (
                   <div className="minutes-open">
                     <ol className="entries">
                       <Entry
@@ -163,10 +191,11 @@ export default function Minutes() {
   );
 }
 
-/** Starts a new meeting: title, optional contact, then the recorder. Saved as soon as it stops. */
+/** Starts a new meeting: its type, then title, optional contact and the recorder. Saved as soon as it stops. */
 function MeetingRecorder({ contacts, onCancel, onSaved }) {
   const { api, uid, workspace, toast } = useApp();
   const [lang, setLang] = useSpeechLanguage();
+  const [type, setType] = useState(null);
   const [title, setTitle] = useState('');
   const [contactId, setContactId] = useState('');
   const [last, setLast] = useState(null); // the recording, kept to retry a failed save
@@ -183,7 +212,8 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
       let saved = r.saved || await api.insertInteraction({
         kind: 'Meeting',
         occurred_on: todayISO(),
-        title: title.trim() || 'Meeting',
+        title: title.trim() || type,
+        meeting_type: type,
         transcript: r.liveTranscript || null,
         contact_id: c ? c.id : null,
         workspace_id: c ? c.workspace_id : workspace.id,
@@ -191,7 +221,7 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
       r.saved = saved;
       const path = await api.uploadRecording(saved.workspace_id, c ? c.id : `m-${uid}`, saved.id, r.blob, r.ext);
       saved = await api.updateInteraction(saved.id, { audio_path: path, duration_sec: r.duration });
-      toast('Saved. Meeting recorded.');
+      toast('Saved. Now writing the minutes.');
       await onSaved(saved);
     } catch (e) {
       setErr(`The recording was not saved: ${e.message}`);
@@ -202,11 +232,35 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
   };
   const onRecorded = (r) => { setLast(r); save(r); };
 
+  if (!type) {
+    return (
+      <div className="panel meeting-recorder">
+        <h2 className="h3" id="meet-type-q">What type of meeting is this?</h2>
+        <div className="meeting-types" role="group" aria-labelledby="meet-type-q">
+          {MEETING_TYPES.map((t) => (
+            <button key={t.value} type="button" className="meeting-type" onClick={() => setType(t.value)}>
+              <strong>{t.value}</strong>
+              <span className="small muted">{t.focus}</span>
+            </button>
+          ))}
+        </div>
+        <div className="form-actions">
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="panel meeting-recorder">
+      <div className="meeting-type-chosen">
+        <span className="small muted">Meeting type</span>
+        <strong>{type}</strong>
+        {!last && <button type="button" className="link small" onClick={() => setType(null)}>Change</button>}
+      </div>
       <div className="field">
         <label htmlFor="meet-title">Meeting title</label>
-        <input id="meet-title" type="text" placeholder="Meeting" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!last} />
+        <input id="meet-title" type="text" placeholder={type} value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!last} />
       </div>
       <div className="field">
         <label htmlFor="meet-contact">Contact <span className="muted small">(optional)</span></label>

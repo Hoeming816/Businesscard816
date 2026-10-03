@@ -1069,3 +1069,71 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .deleted-user .inline-form { flex-wrap: wrap; }
 .admin-tabs { overflow-x: auto; scrollbar-width: none; }
 @media (max-width: 480px) { .admin-tabs .tab { padding-left: 8px; padding-right: 8px; gap: 5px; } }
+
+/* Typed meetings: meeting type picker and the six AI outputs */
+.meeting-types { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.meeting-type {
+  display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.meeting-type:hover, .meeting-type:focus-visible { border-color: var(--accent); }
+.meeting-type-chosen { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.minutes-tag-type { background: var(--accent-soft); color: var(--accent-soft-ink); }
+.meeting { display: grid; gap: 12px; width: 100%; min-width: 0; }
+.meeting-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meeting-audio audio { width: 100%; }
+.meeting-making { display: flex; align-items: center; gap: 8px; margin: 0; }
+.meeting-tabs { overflow-x: auto; scrollbar-width: none; }
+.meeting-tabs .tab { white-space: nowrap; flex: none; }
+@media (max-width: 480px) { .meeting-tabs .tab { padding-left: 8px; padding-right: 8px; } }
+.meeting-panel { min-width: 0; }
+.meeting-bullets { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.meeting-tools { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+
+.formal-minutes { display: grid; gap: 14px; }
+.formal-minutes h4 { margin: 0; text-transform: uppercase; letter-spacing: .06em; font-size: .85rem; }
+.fm-details { display: grid; gap: 4px; margin: 0; }
+.fm-details > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; }
+.fm-details dt { color: var(--ink-3); font-size: .85rem; }
+.fm-details dd { margin: 0; }
+.fm-section h5 { margin: 0 0 6px; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); }
+.fm-section ol, .fm-section ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.fm-section p { margin: 0; }
+
+.decisions { list-style: none; margin: 0; padding: 0 !important; display: grid; gap: 8px; }
+.decisions li { display: grid; gap: 2px; border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; }
+.decision-no { font-weight: 700; font-size: .85rem; }
+
+.actions-list { list-style: none; margin: 0; padding: 0 !important; display: grid; gap: 8px; }
+.actions-list li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.actions-list li.is-done .action-text { text-decoration: line-through; color: var(--ink-3); }
+.action-check input { width: 20px; height: 20px; margin: 2px 0 0; }
+.action-body { display: grid; gap: 4px; min-width: 0; }
+.action-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--ink-2); }
+.action-meta > span:not(.pill) { display: inline-flex; align-items: center; gap: 4px; }
+
+.transcript-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.transcript-line {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; width: 100%; text-align: left;
+  padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit;
+}
+button.transcript-line { cursor: pointer; }
+button.transcript-line:hover, button.transcript-line:focus-visible { background: var(--surface-3); }
+.transcript-time { color: var(--accent); padding-top: 2px; }
+.transcript-plain { white-space: pre-wrap; margin: 0; }
+
+.ask-ai { display: grid; gap: 10px; }
+.ask-ideas .chip { white-space: normal; text-align: left; height: auto; padding-top: 6px; padding-bottom: 6px; }
+.ask-turn { display: grid; gap: 6px; }
+.ask-q { margin: 0; justify-self: end; max-width: 85%; background: var(--accent-soft); color: var(--accent-soft-ink); padding: 8px 12px; border-radius: 12px 12px 2px 12px; }
+.ask-a { justify-self: start; max-width: 100%; background: var(--surface-3); padding: 8px 12px; border-radius: 12px 12px 12px 2px; display: grid; gap: 4px; }
+.ask-a p { margin: 0; white-space: pre-wrap; }
+.ask-a .link { justify-self: start; }
+.ask-form { display: flex; gap: 8px; }
+.ask-form input { flex: 1; min-width: 0; }
+
+.minutes-editor .me-group { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.me-row { display: flex; gap: 6px; align-items: center; }
+.me-row input { flex: 1; min-width: 0; }
+.me-topic, .me-action { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.me-action-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }

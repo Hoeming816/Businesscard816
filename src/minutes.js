@@ -118,7 +118,7 @@ export function minutesColumns(minutes) {
 }
 
 const pad = (n) => String(n).padStart(2, '0');
-const clock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export const clock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 /** Start and end of the recording as Date objects, or null when unknown. */
 export function meetingTimes(i) {
@@ -159,4 +159,14 @@ export function minutesText(i, contact, formatDate = (d) => d) {
   section('NEXT STEPS', m.next_steps.map((x) => `• ${x}`));
   if (m.next_meeting) out.push('', 'NEXT MEETING', /^\d{4}-\d{2}-\d{2}$/.test(m.next_meeting) ? formatDate(m.next_meeting) : m.next_meeting);
   return out.join('\n').trim();
+}
+
+/** 'done' | 'overdue' | 'soon' (due within 3 days) | '' for an action item, as of `today` (YYYY-MM-DD). */
+export function dueState(a, today) {
+  if (a.status === 'Done') return 'done';
+  if (!a.due) return '';
+  if (a.due < today) return 'overdue';
+  const soon = new Date(`${today}T00:00:00Z`);
+  soon.setUTCDate(soon.getUTCDate() + 3);
+  return a.due <= soon.toISOString().slice(0, 10) ? 'soon' : '';
 }
