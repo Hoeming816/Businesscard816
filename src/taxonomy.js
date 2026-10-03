@@ -51,6 +51,22 @@ export const PHONE_LABELS = ['Mobile', 'Office', 'Direct', 'Fax', 'Other'];
 
 export const INTERACTION_KINDS = ['Meeting', 'Call', 'Site visit', 'Email', 'Message', 'Note'];
 
+// Asked when a meeting recording starts; `focus` steers what the AI minutes concentrate on.
+export const MEETING_TYPES = [
+  { value: 'General Meeting', focus: 'Topics, decisions, actions' },
+  { value: 'Management Meeting', focus: 'Decisions, risks, KPIs, approvals' },
+  { value: 'Project Meeting', focus: 'Progress, issues, delays, actions' },
+  { value: 'Sales Meeting', focus: 'Customer needs, opportunities, follow-ups' },
+  { value: 'Technical Meeting', focus: 'Problems, solutions, technical decisions' },
+  { value: 'Site Meeting', focus: 'Site issues, manpower, materials, schedule' },
+  { value: 'Client Meeting', focus: 'Requirements, commitments, decisions' },
+  { value: 'Brainstorming', focus: 'Ideas, suggestions, conclusions' },
+  { value: 'Interview', focus: 'Questions, answers, candidate information' },
+];
+
+export const ACTION_PRIORITIES = ['High', 'Medium', 'Low'];
+export const ACTION_STATUSES = ['Open', 'Done'];
+
 export const LAST_CONTACT_BUCKETS = ['Today', '7 Days', '30 Days', '90 Days', '6+ Months', 'Never Contacted'];
 
 export const FOLLOW_UP_BUCKETS = ['Follow-up Due', 'Follow-up Today', 'Upcoming', 'Overdue', 'No Follow-up'];
