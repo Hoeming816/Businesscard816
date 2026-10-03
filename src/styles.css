@@ -1015,9 +1015,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 /* ---------------------------------------------------------------- Home tabs + meeting minutes */
 .home { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .tab-img { width: 28px; height: 28px; flex: none; object-fit: contain; }
-.home-tabs .tab .icon { width: 24px; height: 24px; }
-.home-tabs .tab { flex: 1 1 0; justify-content: center; text-align: center; font-size: 15px; padding: 10px 14px; }
-@media (min-width: 720px) { .home-tabs .tab { flex: 0 0 auto; } }
+/* Home tabs: icon on top, name underneath */
+.home-tabs .tab { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 6px; text-align: center; font-size: 14px; padding: 8px 10px 10px; }
+.home-tabs .tab-img { width: 44px; height: 44px; }
+.home-tabs .tab .icon { width: 44px; height: 44px; padding: 8px; }
+@media (min-width: 720px) { .home-tabs .tab { flex: 0 0 160px; } }
 .minutes-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; max-width: 860px; }
 .minutes-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .minutes-row {
