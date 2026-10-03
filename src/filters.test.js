@@ -115,6 +115,15 @@ describe('search (FR-17)', () => {
     expect(matchesSearch(c, '  MARIA   Santos ')).toBe(true);
     expect(tokenize('  a  b ')).toEqual(['a', 'b']);
   });
+  it('matches Chinese names, companies and full-width text', () => {
+    const zh = mk({ full_name: 'Tan Wei Ming (陈伟明)', company: '亚斯本通讯科技有限公司', card_text: 'ＴＥＬ：＋６３ ９１７' });
+    expect(matchesSearch(zh, '陈伟明')).toBe(true);
+    expect(matchesSearch(zh, '伟明')).toBe(true);
+    expect(matchesSearch(zh, '通讯 tan')).toBe(true);
+    expect(matchesSearch(zh, 'tel')).toBe(true);
+    expect(matchesSearch(zh, '９１７')).toBe(true);
+    expect(matchesSearch(zh, '李')).toBe(false);
+  });
   it('empty query matches everything', () => {
     expect(matchesSearch(mk(), '')).toBe(true);
     expect(matchesSearch(mk(), '   ')).toBe(true);

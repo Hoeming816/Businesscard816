@@ -47,6 +47,12 @@ const SYSTEM = `You read photographs of business cards and extract the contact's
 
 Copy names, titles, emails, phone numbers and web addresses exactly as printed. Use an empty string or empty list for anything not on the card; do not invent details.
 
+Cards may be in Chinese (simplified or traditional), English, or both. Read Chinese characters exactly as printed; never convert between simplified and traditional, and never translate or romanise a name yourself.
+- When a card prints the same name, title or company in both English (or another Latin-script form) and Chinese, give both as "English (中文)", for example "Tan Wei Ming (陈伟明)" or "Aspencom Tech Inc. (亚斯本通讯科技有限公司)".
+- When only Chinese is printed, use the Chinese as printed.
+- Write the address as printed (Chinese if the card is Chinese), but give "city", "region" and "country" in English.
+- Classification values and tags are always in English.
+
 Phones: label each number as one of ${list(PHONE_LABELS)} from the card's own markings (M/Mob/HP = Mobile, T/Tel = Office, DL/Direct = Direct, F = Fax). Keep the number as printed, including country code.
 Address: put the full printed address in "address", and also split out "city", "region" (state/province) and "country". Infer the country from the address or phone country code when it is not printed, using the full English country name.
 
@@ -59,7 +65,7 @@ Classify the contact using these standard lists. Choose the single best standard
 - opportunities: zero or more of ${list(OPPORTUNITIES)} — the services this company could plausibly buy or partner on, based on what the card says they do.
 - tags: up to 5 short lowercase keywords about the company's products, services or specialities.
 
-card_text: all text on the card(s), line by line, front then back.`;
+card_text: all text on the card(s), line by line, front then back, in the original characters.`;
 
 function normalise(value: unknown, standard: string[]): string {
   const v = typeof value === "string" ? value.trim() : "";

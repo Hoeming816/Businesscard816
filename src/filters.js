@@ -138,11 +138,12 @@ export function searchText(contact) {
     parts.push(p.number, p.number.replace(/[^\d+]/g, ''));
   }
   for (const t of contact.tags || []) parts.push(t);
-  return parts.join(' \u0001 ').toLowerCase();
+  return parts.join(' \u0001 ').normalize('NFKC').toLowerCase();
 }
 
 export function tokenize(query) {
-  return String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  // NFKC folds full-width letters and digits (common on Chinese cards) to normal ones.
+  return String(query || '').normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean);
 }
 
 /** True when every word of the query appears somewhere in the searchable fields. */

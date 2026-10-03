@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
-import { prepareImage } from '../image.js';
+import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
+import CardCropper from './CardCropper.jsx';
 import { blankDraft, draftFromScan, fromDraft } from '../contactModel.js';
 import { findDuplicates } from '../filters.js';
 import { canWrite } from '../perms.js';
@@ -8,7 +9,7 @@ import ContactForm from './ContactForm.jsx';
 import { Icon, Spinner, EmptyState } from './ui.jsx';
 
 export default function Scan() {
-  const { api, uid, role, workspace, contacts, upsertContact, toast, setView } = useApp();
+  const { api, uid, role, workspace, contacts, upsertContact, toast, setView, quickShot, clearQuickShot } = useApp();
   const [front, setFront] = useState(null); // { blob, url, base64 }
   const [back, setBack] = useState(null);
   const [draft, setDraft] = useState(blankDraft);
@@ -22,6 +23,56 @@ export default function Scan() {
   const row = useMemo(() => fromDraft(draft), [draft]);
   const dups = useMemo(() => findDuplicates(contacts, row), [contacts, row]);
   const hasContent = !!(row.full_name || row.company || row.emails.length || row.phones.length);
+
+  // Every new photo opens the cropper first: { side, canvas, quad, detected }.
+  const [crop, setCrop] = useState(null);
+  const [loadingSide, setLoadingSide] = useState('');
+  const [cropBusy, setCropBusy] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  const setSide = (side, img) => {
+    const [cur, set] = side === 'Front' ? [front, setFront] : [back, setBack];
+    if (cur?.url) URL.revokeObjectURL(cur.url);
+    set(img);
+  };
+
+  const startCrop = async (file, side) => {
+    setLoadingSide(side);
+    try {
+      const canvas = await loadPhoto(file);
+      if (!alive.current) return;
+      const found = findCard(canvas);
+      setCrop({ side, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found });
+      setReadError('');
+    } catch (e) {
+      toast(e.message || 'Could not use that image.', 'error');
+    } finally {
+      if (alive.current) setLoadingSide('');
+    }
+  };
+
+  const finishCrop = async (quad) => {
+    setCropBusy(true);
+    try {
+      const img = quad ? await cropToCard(crop.canvas, quad) : await wholePhoto(crop.canvas);
+      if (!alive.current) return;
+      setSide(crop.side, img);
+      setCrop(null);
+    } catch (e) {
+      toast(e.message || 'Could not crop that photo.', 'error');
+    } finally {
+      if (alive.current) setCropBusy(false);
+    }
+  };
+
+  // A photo taken from the Scan tab button goes to the first empty side.
+  useEffect(() => {
+    if (!quickShot) return;
+    const { file } = quickShot;
+    clearQuickShot();
+    startCrop(file, !front ? 'Front' : !back ? 'Back' : 'Front');
+  }, [quickShot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
     if (front?.url) URL.revokeObjectURL(front.url);
@@ -119,6 +170,19 @@ export default function Scan() {
 
   return (
     <div className="page scan">
+      {crop && (
+        <CardCropper
+          key={crop.canvas.width + 'x' + crop.canvas.height + crop.side}
+          side={crop.side}
+          canvas={crop.canvas}
+          initialQuad={crop.quad}
+          detected={crop.detected}
+          busy={cropBusy}
+          onCrop={finishCrop}
+          onSkip={() => finishCrop(null)}
+          onCancel={() => setCrop(null)}
+        />
+      )}
       <div className="page-head">
         <h1 className="h1">Scan card</h1>
         <p className="muted">Add the front (and back, if it has details), then let Nomiqo read it, or type the details yourself.</p>
@@ -126,8 +190,8 @@ export default function Scan() {
 
       <div className="scan-grid">
         <section className="scan-photos" aria-label="Card photos">
-          <PhotoSlot label="Front" required value={front} onChange={setFront} onError={(m) => toast(m, 'error')} />
-          <PhotoSlot label="Back" value={back} onChange={setBack} onError={(m) => toast(m, 'error')} />
+          <PhotoSlot label="Front" required busy={loadingSide === 'Front'} value={front} onPick={(f) => startCrop(f, 'Front')} onChange={setFront} />
+          <PhotoSlot label="Back" busy={loadingSide === 'Back'} value={back} onPick={(f) => startCrop(f, 'Back')} onChange={setBack} />
           <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={read}>
             {reading ? <><Spinner /> Reading card…</> : <><Icon name="sparkles" size={18} /> {readDone ? 'Read card again' : 'Read card'}</>}
           </button>
@@ -179,26 +243,12 @@ export default function Scan() {
   );
 }
 
-function PhotoSlot({ label, required, value, onChange, onError }) {
+function PhotoSlot({ label, required, busy, value, onPick, onChange }) {
   const [over, setOver] = useState(false);
-  const [busy, setBusy] = useState(false);
   const cam = useRef(null);
   const file = useRef(null);
   const id = `slot-${label.toLowerCase()}`;
-
-  const take = async (f) => {
-    if (!f) return;
-    setBusy(true);
-    try {
-      const img = await prepareImage(f);
-      if (value?.url) URL.revokeObjectURL(value.url);
-      onChange(img);
-    } catch (e) {
-      onError(e.message || 'Could not use that image.');
-    } finally {
-      setBusy(false);
-    }
-  };
+  const take = (f) => { if (f) onPick(f); };
 
   return (
     <div className="slot">
