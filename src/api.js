@@ -438,7 +438,7 @@ export async function downloadRecording(path) {
   return data;
 }
 
-/** Server-side transcription. Throws with code 'not_configured' if Whisper is off. */
+/** Server-side transcription: { text, segments: [{ t: seconds, text }] }. Throws with code 'not_configured' if it is off. */
 export async function transcribe(blob, language, ext) {
   const form = new FormData();
   form.append('action', 'transcribe');
@@ -446,7 +446,7 @@ export async function transcribe(blob, language, ext) {
   form.append('audio', blob, `rec.${ext}`);
   try {
     const data = await invoke('meeting-notes', form);
-    return data.transcript || '';
+    return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [] };
   } catch (e) {
     if (/not configured|not set up|openai_api_key|not enabled/i.test(e.message)) e.code = 'not_configured';
     throw e;
@@ -463,6 +463,17 @@ export async function summarise(payload) {
     follow_up_on: data.follow_up_on || null,
     lead_status: data.lead_status || null,
   };
+}
+
+/** AI minutes for a typed meeting: quick summary, formal minutes, action items and decisions. */
+export async function meetingMinutes(payload) {
+  return invoke('meeting-notes', { action: 'minutes', ...payload });
+}
+
+/** Answers a question about one meeting (or drafts an email or report from it). Returns the answer text. */
+export async function askMeeting(payload) {
+  const data = await invoke('meeting-notes', { action: 'ask', ...payload });
+  return data.answer || '';
 }
 
 // ---------------------------------------------------------------------------

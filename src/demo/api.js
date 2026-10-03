@@ -375,6 +375,7 @@ export async function insertInteraction(row) {
   if (row.contact_id ? !c || !canEditContact(c, roleIn(c.workspace_id), uid()) : !roleIn(row.workspace_id)) deny();
   const i = {
     action_items: [], title: null, notes: null, transcript: null, summary: null, audio_path: null, duration_sec: null,
+    meeting_type: null, minutes: null, segments: null,
     ...clone(row), id: newId('i'), contact_id: c ? c.id : null, workspace_id: c ? c.workspace_id : row.workspace_id,
     created_by: uid(), created_at: now(), updated_at: now(),
   };
@@ -413,12 +414,22 @@ export async function downloadRecording(path) {
   if (!url) throw new Error('Could not load the recording');
   return (await fetch(url)).blob();
 }
+const DEMO_LINES = [
+  [0, 'Thanks for making the time today. Let us go through the fibre rollout for the two Singapore sites.'],
+  [7.5, 'Peter, can you submit the bill of materials by Wednesday?'],
+  [12, 'Yes, I will submit the BOM by Wednesday.'],
+  [16.5, 'We agreed to proceed with Supplier A for the fibre.'],
+  [22, 'Installation manpower goes from six to eight technicians so we finish before Friday.'],
+  [29, 'Engineering will complete the T3 site survey by the tenth.'],
+  [34.5, 'The client still has to approve the revised layout, which is a risk to the schedule.'],
+  [41, 'Let us meet again next Monday to check progress.'],
+];
+
 export async function transcribe() {
   needFeature('meeting', 'Meeting');
   await sleep(1500);
-  return 'Thanks for making the time today. We are planning to refresh the network across our two Singapore sites next year. '
-    + 'The main pain points are the ageing core switches and patchy Wi-Fi on the operations floor. '
-    + 'We would like a proposal by the end of the month, and ideally a site survey before that.';
+  const segments = DEMO_LINES.map(([t, text]) => ({ t, text }));
+  return { text: segments.map((x) => x.text).join(' '), segments };
 }
 export async function summarise({ contact, today, notes, transcript }) {
   needFeature('meeting', 'Meeting');
@@ -436,6 +447,49 @@ export async function summarise({ contact, today, notes, transcript }) {
     follow_up_on: addDays(t, 7),
     lead_status: next[contact?.lead_status] || 'Qualified',
   };
+}
+
+export async function meetingMinutes({ meeting_type, date }) {
+  needFeature('meeting', 'Meeting');
+  await sleep(1800);
+  const d = date || todayISO();
+  return {
+    quick_summary: [
+      `This ${String(meeting_type || 'meeting').toLowerCase()} reviewed the fibre rollout for the two Singapore sites.`,
+      'Supplier A was chosen for the fibre.',
+      'Installation crew goes from six to eight technicians to finish before Friday.',
+      'Peter submits the bill of materials by Wednesday.',
+      'Engineering completes the T3 site survey by the tenth.',
+      'Client approval of the revised layout is still pending and is a schedule risk.',
+      '(Demo minutes: the live app writes these with Claude.)',
+    ],
+    chairperson: 'Alex',
+    attendees: ['Alex', 'Peter', 'Engineering', 'Sales'],
+    location: '',
+    agenda: ['Fibre supplier', 'Installation manpower and schedule', 'Site survey', 'Client approval'],
+    discussion: [
+      { topic: 'Fibre supplier', points: ['Supplier A offers the best lead time.'] },
+      { topic: 'Installation manpower and schedule', points: ['Six technicians cannot finish before Friday.', 'Two more technicians will be assigned.'] },
+      { topic: 'Site survey', points: ['T3 survey still to be done by Engineering.'] },
+      { topic: 'Client approval', points: ['The revised layout is waiting on the client.'] },
+    ],
+    decisions: ['Proceed with Supplier A.', 'Increase installation manpower from six to eight technicians.'],
+    action_items: [
+      { action: 'Submit the bill of materials', assigned_to: 'Peter', due: addDays(d, 2), priority: 'High' },
+      { action: 'Complete the T3 site survey', assigned_to: 'Engineering', due: addDays(d, 7), priority: 'Medium' },
+      { action: 'Get client approval of the revised layout', assigned_to: 'Sales', due: '', priority: 'High' },
+    ],
+    issues: ['Client approval of the revised layout could delay installation.'],
+    next_steps: ['Confirm fibre delivery dates with Supplier A.'],
+    next_meeting: addDays(d, 7),
+  };
+}
+
+export async function askMeeting({ question, minutes }) {
+  needFeature('meeting', 'Meeting');
+  await sleep(1200);
+  const acts = (minutes?.action_items || []).map((a) => `• ${a.action}: ${a.assigned_to || 'not assigned'}${a.due ? `, due ${a.due}` : ''}`).join('\n');
+  return `(Demo answer: the live app asks Claude.) You asked: "${question}". From this meeting's action items:\n${acts || 'none were recorded.'}`;
 }
 
 function requireSuper() {

@@ -3,7 +3,7 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import { isMinutes, minutesRow, shareOrCopy, shareText } from '../minutes.js';
+import { clock, isMinutes, meetingTimes, minutesColumns, minutesRow, normaliseMinutes, recordedAt, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
@@ -106,16 +106,57 @@ export function useEntryActions({ reload, contactFor }) {
     }
   };
 
+  const [stage, setStage] = useState(''); // what making minutes is doing now, for the button
+
+  // A typed meeting: recording -> timed transcript -> minutes (Claude), saved on the meeting itself.
+  const makeMeetingMinutes = async (i, contact) => {
+    let transcript = i.transcript || '';
+    let segments = i.segments;
+    if (i.audio_path && !Array.isArray(segments)) {
+      setStage('Transcribing…');
+      try {
+        const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
+        const r = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
+        if (r.text) ({ text: transcript, segments } = r);
+      } catch (e) {
+        if (e.code !== 'not_configured') throw e;
+        if (!transcript && !i.notes) {
+          throw new Error('Turning a recording into text needs transcription switched on. Ask your admin to add the AI_GATEWAY_API_KEY secret in Supabase.');
+        }
+      }
+      if (!transcript && !i.notes) throw new Error('No speech was found in this recording.');
+      if (Array.isArray(segments)) await api.updateInteraction(i.id, { transcript, segments });
+    }
+    setStage('Writing minutes…');
+    const t = meetingTimes(i);
+    const ai = await api.meetingMinutes({
+      title: i.title || '',
+      meeting_type: i.meeting_type,
+      date: i.occurred_on,
+      time: t ? `${clock(t.start)}–${clock(t.end)}` : '',
+      notes: i.notes || '',
+      transcript,
+      contact: contact ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title } : {},
+    });
+    await api.updateInteraction(i.id, minutesColumns(normaliseMinutes(ai)));
+  };
+
   // Recording -> transcript -> minutes (Claude) -> a new Note next to it.
   const makeMinutes = async (i) => {
     const contact = contactFor(i);
     setMaking(i.id);
     try {
+      if (i.meeting_type) {
+        await makeMeetingMinutes(i, contact);
+        await reload();
+        toast('Saved. Minutes are ready.');
+        return;
+      }
       let transcript = i.transcript || '';
       if (!transcript) {
         try {
           const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-          transcript = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
+          transcript = (await api.transcribe(await api.downloadRecording(i.audio_path), null, ext)).text;
         } catch (e) {
           if (e.code !== 'not_configured') throw e;
           if (!i.notes) {
@@ -141,6 +182,7 @@ export function useEntryActions({ reload, contactFor }) {
       toast(`Could not make minutes: ${e.message}`, 'error');
     } finally {
       setMaking(null);
+      setStage('');
     }
   };
 
@@ -163,15 +205,9 @@ export function useEntryActions({ reload, contactFor }) {
     }
   };
 
-  return { making, makeMinutes, share, removeRecording, remove };
+  return { making, stage, makeMinutes, share, removeRecording, remove };
 }
 
-/** When a recording was made: from its file name (…-<ms>.ext), else when the entry was created. */
-export function recordedAt(i) {
-  const m = /-(\d{13})\.\w+$/.exec(i.audio_path || '');
-  const d = m ? new Date(Number(m[1])) : new Date(i.created_at);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 const formatDateTime = (d) => d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
