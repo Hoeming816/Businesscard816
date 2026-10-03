@@ -43,7 +43,7 @@ async function summarise(body: Record<string, unknown>) {
   const header = [
     `Meeting date: ${today}`,
     `Entry type: ${body.kind ?? "Meeting"}`,
-    `Contact: ${[contact.full_name, contact.job_title, contact.company].filter(Boolean).join(", ") || "unknown"}`,
+    `Contact: ${[contact.full_name, contact.job_title, contact.company].filter(Boolean).join(", ") || "none linked (a general meeting)"}`,
     `Current lead status: ${contact.lead_status || "not set"}`,
   ].join("\n");
 

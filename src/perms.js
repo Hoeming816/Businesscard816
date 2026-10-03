@@ -17,6 +17,8 @@ export function canAddInteraction(c, role, uid) {
   return canEditContact(c, role, uid);
 }
 
+/** A meeting recorded without a card belongs to whoever recorded it (0006). */
 export function canEditInteraction(i, c, role, uid) {
-  return canEditContact(c, role, uid);
+  if (!i.contact_id) return i.created_by === uid;
+  return !!c && canEditContact(c, role, uid);
 }
