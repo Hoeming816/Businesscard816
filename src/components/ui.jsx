@@ -71,16 +71,14 @@ export function Logo({ compact = false, byline = false }) {
     <span className="logo">
       <svg className="logo-mark" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
         <rect width="64" height="64" rx="15" fill="#2b55e0" />
-        <rect x="20" y="10" width="33" height="21" rx="4" fill="#fff" opacity=".3" transform="rotate(-9 36.5 20.5)" />
-        <rect x="9" y="19" width="38" height="25" rx="4.5" fill="#fff" />
-        <rect x="15" y="26" width="13" height="3.6" rx="1.8" fill="#2b55e0" />
-        <rect x="15" y="33.4" width="20" height="2.8" rx="1.4" fill="#2b55e0" opacity=".42" />
-        <path d="M14 52.5 C 32 56.5, 48 52, 53.5 37" fill="none" stroke="#a9bdff" strokeWidth="4" strokeLinecap="round" />
-        <path d="M48.6 39.6 L 53.8 35.6 L 57.4 41.2" fill="none" stroke="#a9bdff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="17" y="9" width="36" height="23" rx="4.5" fill="#fff" opacity=".3" transform="rotate(-9 35 20.5)" />
+        <rect x="9" y="20" width="42" height="28" rx="5" fill="#fff" />
+        <path d="M21 41.5 V 26.5 L 36 41.5 V 26.5" fill="none" stroke="#2b55e0" strokeWidth="4.8" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="44.5" cy="41.5" r="3" fill="#7d99ff" />
       </svg>
       {!compact && (
         <span className="logo-text">
-          <span className="logo-word">Card<span className="logo-flow">Flow</span></span>
+          <span className="logo-word">Nomi<span className="logo-flow">qo</span></span>
           {byline && <span className="logo-by">by Aspencom</span>}
         </span>
       )}

@@ -1,4 +1,4 @@
-// Shared helpers for CardFlow edge functions.
+// Shared helpers for Nomiqo edge functions.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export const corsHeaders = {

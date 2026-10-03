@@ -133,12 +133,12 @@ export default function AuthScreen({ onSuspended }) {
         </form>
         <p className="auth-switch">
           {mode === 'signin' ? (
-            <>New to CardFlow? <button type="button" className="link" onClick={() => switchMode('signup')}>Create an account</button></>
+            <>New to Nomiqo? <button type="button" className="link" onClick={() => switchMode('signup')}>Create an account</button></>
           ) : (
             <>Already have an account? <button type="button" className="link" onClick={() => switchMode('signin')}>Sign in</button></>
           )}
         </p>
-        <p className="help auth-foot">Forgot your password? Ask your CardFlow administrator to reset it.</p>
+        <p className="help auth-foot">Forgot your password? Ask your Nomiqo administrator to reset it.</p>
       </div>
     </div>
   );
@@ -150,11 +150,11 @@ export function SuspendedScreen({ reason, onBack }) {
       <div className="auth-panel center">
         <div className="suspended-icon"><Icon name="lock" size={28} /></div>
         <h1 className="auth-title">Access suspended</h1>
-        <p className="muted">Your CardFlow account has been suspended by an administrator, so you cannot sign in or see any workspace data.</p>
+        <p className="muted">Your Nomiqo account has been suspended by an administrator, so you cannot sign in or see any workspace data.</p>
         {reason ? (
           <blockquote className="reason"><span className="reason-label">Reason given</span>{reason}</blockquote>
         ) : null}
-        <p className="help">If you think this is a mistake, contact your CardFlow administrator.</p>
+        <p className="help">If you think this is a mistake, contact your Nomiqo administrator.</p>
         <button type="button" className="btn btn-ghost" onClick={onBack}><Icon name="chevronLeft" size={16} /> Back to sign in</button>
       </div>
     </div>

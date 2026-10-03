@@ -112,7 +112,7 @@ export default function Team() {
       {isAdmin && (
         <form className="panel add-member" onSubmit={add}>
           <h2 className="h3">Add a member</h2>
-          <p className="help">They need to have signed up for CardFlow first. Ask them for their username.</p>
+          <p className="help">They need to have signed up for Nomiqo first. Ask them for their username.</p>
           <div className="add-row">
             <div className="field grow">
               <label htmlFor="add-username">Username</label>
