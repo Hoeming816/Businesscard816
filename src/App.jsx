@@ -133,6 +133,25 @@ export default function App() {
     else if (selectId) switchWorkspace(selectId);
   }, [user, wsId, switchWorkspace]);
 
+  // Refresh: reload the page when a newer build is live (so installed home-screen
+  // apps pick it up), otherwise re-fetch this workspace's data.
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const current = document.querySelector('script[type="module"][src]')?.getAttribute('src');
+      if (current) {
+        const html = await fetch('/', { cache: 'no-store' }).then((r) => r.text()).catch(() => '');
+        const latest = html.match(/<script[^>]+type="module"[^>]+src="([^"]+)"/)?.[1];
+        if (latest && latest !== current) { window.location.reload(); return; }
+      }
+      await Promise.all([reloadWorkspaces().catch(() => {}), reloadContacts(), reloadMembers()]);
+      toast('Up to date.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reloadWorkspaces, reloadContacts, reloadMembers, toast]);
+
   const upsertContact = useCallback((c, removedId) => {
     setContacts((list) => {
       if (!c) return list.filter((x) => x.id !== removedId);
@@ -249,6 +268,16 @@ export default function App() {
             ))}
           </nav>
           {api.isDemo && <span className="demo-badge" title="Sample data, nothing is saved">Demo</span>}
+          <button
+            type="button"
+            className={`icon-btn refresh-btn ${refreshing ? 'is-busy' : ''}`}
+            onClick={refresh}
+            disabled={refreshing}
+            aria-label="Refresh"
+            title="Refresh"
+          >
+            <Icon name="refresh" size={19} />
+          </button>
           <button
             type="button"
             className={`avatar-btn ${view === 'me' ? 'is-active' : ''}`}

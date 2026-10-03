@@ -414,7 +414,10 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   padding: 5px 8px; border-radius: 6px; background: var(--warn-soft); color: var(--warn);
 }
 .avatar-btn { border: 0; background: none; padding: 2px; border-radius: 50%; cursor: pointer; margin-left: auto; }
-.topnav ~ .avatar-btn, .demo-badge ~ .avatar-btn { margin-left: 0; }
+.topnav ~ .avatar-btn, .demo-badge ~ .avatar-btn, .refresh-btn ~ .avatar-btn { margin-left: 0; }
+.refresh-btn { margin-left: auto; flex: none; }
+.topnav ~ .refresh-btn, .demo-badge ~ .refresh-btn { margin-left: 0; }
+.refresh-btn.is-busy .icon { animation: spin .8s linear infinite; }
 .avatar-btn.is-active .avatar, .avatar-btn:hover .avatar { box-shadow: 0 0 0 2px var(--accent); }
 
 .main { max-width: 1360px; margin: 0 auto; padding: 24px calc(24px + var(--safe-r)) 48px calc(24px + var(--safe-l)); }
