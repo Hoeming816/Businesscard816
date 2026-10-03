@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../context.js';
+import lockupUrl from '../assets/nomiqo-lockup.png';
 import { Icon, Logo } from './ui.jsx';
 
 export const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
@@ -71,7 +72,8 @@ export default function AuthScreen({ onSuspended }) {
         </div>
       </div>
       <div className="auth-panel">
-        <Logo />
+        <img className="auth-lockup" src={lockupUrl} alt="Nomiqo by Aspencom. Scan. Organize. Connect." />
+        <span className="auth-logo-dark"><Logo byline tagline /></span>
         <h1 className="auth-title">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h1>
         <p className="muted auth-sub">
           {mode === 'signin'
@@ -133,12 +135,12 @@ export default function AuthScreen({ onSuspended }) {
         </form>
         <p className="auth-switch">
           {mode === 'signin' ? (
-            <>New to Cardfile? <button type="button" className="link" onClick={() => switchMode('signup')}>Create an account</button></>
+            <>New to Nomiqo? <button type="button" className="link" onClick={() => switchMode('signup')}>Create an account</button></>
           ) : (
             <>Already have an account? <button type="button" className="link" onClick={() => switchMode('signin')}>Sign in</button></>
           )}
         </p>
-        <p className="help auth-foot">Forgot your password? Ask your Cardfile administrator to reset it.</p>
+        <p className="help auth-foot">Forgot your password? Ask your Nomiqo administrator to reset it.</p>
       </div>
     </div>
   );
@@ -150,11 +152,11 @@ export function SuspendedScreen({ reason, onBack }) {
       <div className="auth-panel center">
         <div className="suspended-icon"><Icon name="lock" size={28} /></div>
         <h1 className="auth-title">Access suspended</h1>
-        <p className="muted">Your Cardfile account has been suspended by an administrator, so you cannot sign in or see any workspace data.</p>
+        <p className="muted">Your Nomiqo account has been suspended by an administrator, so you cannot sign in or see any workspace data.</p>
         {reason ? (
           <blockquote className="reason"><span className="reason-label">Reason given</span>{reason}</blockquote>
         ) : null}
-        <p className="help">If you think this is a mistake, contact your Cardfile administrator.</p>
+        <p className="help">If you think this is a mistake, contact your Nomiqo administrator.</p>
         <button type="button" className="btn btn-ghost" onClick={onBack}><Icon name="chevronLeft" size={16} /> Back to sign in</button>
       </div>
     </div>

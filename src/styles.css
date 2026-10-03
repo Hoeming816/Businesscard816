@@ -1,4 +1,4 @@
-/* Cardfile: hand-written styles. Tokens first, then layout, then components. */
+/* Nomiqo: hand-written styles. Tokens first, then layout, then components. */
 
 :root {
   color-scheme: light;
@@ -317,7 +317,12 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .panel.center { text-align: center; display: grid; gap: 12px; justify-items: center; }
 
 .logo { display: inline-flex; align-items: center; gap: 9px; }
-.logo-word { font-family: var(--font-head); font-weight: 700; font-size: 20px; letter-spacing: -.02em; color: var(--ink); }
+.logo-mark { display: block; border-radius: 22%; }
+.logo-text { display: inline-flex; flex-direction: column; line-height: 1.1; }
+.logo-flow { color: #1a73f5; background: linear-gradient(90deg, #1668f2, #19b8f0); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.logo-tagline { font-family: 'Montserrat', var(--font-head); margin-top: 6px; font-size: 12px; font-weight: 500; letter-spacing: .22em; color: var(--ink-2); }
+.logo-by { font-family: 'Montserrat', var(--font-head); font-size: 12px; font-weight: 500; color: var(--ink-3); letter-spacing: .01em; }
+.logo-word { font-family: 'Montserrat', var(--font-head); font-weight: 700; font-size: 20px; letter-spacing: -.02em; color: var(--ink); }
 
 /* ---------------------------------------------------------------- boot + auth */
 
@@ -333,6 +338,12 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   display: grid; gap: 14px; padding: 40px 24px;
 }
 .auth-panel.center { justify-items: center; text-align: center; background: var(--surface); border-radius: 18px; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 36px 28px; }
+.auth-lockup { display: block; width: 240px; max-width: 70%; height: auto; }
+.auth-logo-dark { display: none; }
+@media (prefers-color-scheme: dark) { .auth-lockup { display: none; } .auth-logo-dark { display: block; } }
+.auth-panel .logo-mark { width: 52px; height: 52px; }
+.auth-panel .logo { gap: 12px; }
+.auth-panel .logo-word { font-size: 28px; }
 .auth-title { font-size: 30px; font-weight: 700; margin-top: 12px; }
 .auth-sub { margin-top: -4px; }
 .auth-switch { font-size: 14px; color: var(--ink-2); }
@@ -840,7 +851,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   body { font-size: 15px; }
   .h1 { font-size: 24px; }
   .topbar { gap: 10px; padding-left: calc(12px + var(--safe-l)); padding-right: calc(12px + var(--safe-r)); height: calc(54px + var(--safe-t)); }
-  .logo-word { display: none; }
+  .topbar .logo-word { display: none; }
   .topnav { display: none; }
   .ws-switch { flex: 1; max-width: none; }
   .ws-switch select { width: 100%; }

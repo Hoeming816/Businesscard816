@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import markUrl from '../assets/nomiqo-mark.png';
 
 // ---------------------------------------------------------------------------
 // Icons (inline SVG, 24px grid, stroke = currentColor)
@@ -66,16 +67,17 @@ export function Icon({ name, size = 18, className = '', strokeWidth = 1.8, title
   );
 }
 
-export function Logo({ compact = false }) {
+export function Logo({ compact = false, byline = false, tagline = false }) {
   return (
     <span className="logo">
-      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="5" y="5" width="22" height="15" rx="2.5" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5" transform="rotate(-8 16 12)" />
-        <rect x="3" y="10" width="26" height="17" rx="3" fill="var(--accent)" />
-        <rect x="7" y="15" width="10" height="2.6" rx="1.1" fill="var(--accent-ink)" />
-        <rect x="7" y="20" width="15" height="2" rx="1" fill="var(--accent-ink)" opacity=".7" />
-      </svg>
-      {!compact && <span className="logo-word">Cardfile</span>}
+      <img className="logo-mark" src={markUrl} width="30" height="30" alt="" />
+      {!compact && (
+        <span className="logo-text">
+          <span className="logo-word">Nomi<span className="logo-flow">qo</span></span>
+          {byline && <span className="logo-by">by Aspencom</span>}
+          {tagline && <span className="logo-tagline">Scan. Organize. Connect.</span>}
+        </span>
+      )}
     </span>
   );
 }

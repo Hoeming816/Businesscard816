@@ -138,7 +138,7 @@ export default function Contacts() {
             title="No cards yet"
             action={role === 'viewer' ? null : <button type="button" className="btn btn-primary" onClick={() => setView('scan')}><Icon name="scan" size={16} /> Scan your first card</button>}
           >
-            {role === 'viewer' ? 'Cards your team scans will show up here.' : 'Scan a business card and Cardfile will read and file it for you.'}
+            {role === 'viewer' ? 'Cards your team scans will show up here.' : 'Scan a business card and Nomiqo will read and file it for you.'}
           </EmptyState>
         )}
         {contactsState === 'ready' && contacts.length > 0 && !filtered.length && (

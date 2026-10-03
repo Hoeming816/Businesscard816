@@ -32,7 +32,7 @@ export default function SuperAdmin() {
     <div className="page admin">
       <div className="page-head">
         <h1 className="h1">Super admin</h1>
-        <p className="muted">Manage accounts and workspaces across Cardfile. Card contents are never visible here.</p>
+        <p className="muted">Manage accounts and workspaces across Nomiqo. Card contents are never visible here.</p>
       </div>
       {error && <p className="notice notice-error" role="alert">{error}</p>}
 
