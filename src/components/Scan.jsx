@@ -8,7 +8,7 @@ import ContactForm from './ContactForm.jsx';
 import { Icon, Spinner, EmptyState } from './ui.jsx';
 
 export default function Scan() {
-  const { api, uid, role, workspace, contacts, upsertContact, toast, setView } = useApp();
+  const { api, uid, role, workspace, contacts, upsertContact, toast, setView, quickShot, clearQuickShot } = useApp();
   const [front, setFront] = useState(null); // { blob, url, base64 }
   const [back, setBack] = useState(null);
   const [draft, setDraft] = useState(blankDraft);
@@ -22,6 +22,27 @@ export default function Scan() {
   const row = useMemo(() => fromDraft(draft), [draft]);
   const dups = useMemo(() => findDuplicates(contacts, row), [contacts, row]);
   const hasContent = !!(row.full_name || row.company || row.emails.length || row.phones.length);
+
+  // A photo taken from the Scan tab button goes into the first empty side.
+  const [quickBusy, setQuickBusy] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    if (!quickShot) return;
+    const { file } = quickShot;
+    clearQuickShot();
+    setQuickBusy(true);
+    prepareImage(file)
+      .then((img) => {
+        if (!alive.current) return URL.revokeObjectURL(img.url);
+        if (!front) setFront(img);
+        else if (!back) setBack(img);
+        else { URL.revokeObjectURL(front.url); setFront(img); }
+        setReadError('');
+      })
+      .catch((e) => setReadError(e.message || 'Could not use that image.'))
+      .finally(() => { if (alive.current) setQuickBusy(false); });
+  }, [quickShot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
     if (front?.url) URL.revokeObjectURL(front.url);
@@ -126,7 +147,7 @@ export default function Scan() {
 
       <div className="scan-grid">
         <section className="scan-photos" aria-label="Card photos">
-          <PhotoSlot label="Front" required value={front} onChange={setFront} onError={(m) => toast(m, 'error')} />
+          <PhotoSlot label="Front" required busy={quickBusy} value={front} onChange={setFront} onError={(m) => toast(m, 'error')} />
           <PhotoSlot label="Back" value={back} onChange={setBack} onError={(m) => toast(m, 'error')} />
           <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={read}>
             {reading ? <><Spinner /> Reading card…</> : <><Icon name="sparkles" size={18} /> {readDone ? 'Read card again' : 'Read card'}</>}
@@ -179,9 +200,10 @@ export default function Scan() {
   );
 }
 
-function PhotoSlot({ label, required, value, onChange, onError }) {
+function PhotoSlot({ label, required, busy: outerBusy = false, value, onChange, onError }) {
   const [over, setOver] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [ownBusy, setBusy] = useState(false);
+  const busy = ownBusy || outerBusy;
   const cam = useRef(null);
   const file = useRef(null);
   const id = `slot-${label.toLowerCase()}`;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { AppContext, useApp } from './context.js';
 import { load, save } from './storage.js';
+import { canWrite } from './perms.js';
 import { Icon, Logo, Avatar, Spinner } from './components/ui.jsx';
 import AuthScreen, { SuspendedScreen } from './components/Auth.jsx';
 import Contacts from './components/Contacts.jsx';
@@ -24,6 +25,10 @@ export default function App() {
   const [contactsState, setContactsState] = useState('idle'); // idle | loading | ready | error
   const [contactsError, setContactsError] = useState('');
   const [view, setView] = useState('contacts');
+  // Photo taken straight from the Scan tab button; Scan picks it up and clears it.
+  const [quickShot, setQuickShot] = useState(null);
+  const clearQuickShot = useCallback(() => setQuickShot(null), []);
+  const quickCam = useRef(null);
   const [toasts, setToasts] = useState([]);
   const [signedVersion, setSignedVersion] = useState(0);
   const signedRef = useRef(new Map()); // `${bucket}:${path}` -> { url, at }
@@ -180,7 +185,8 @@ export default function App() {
     api, uid: user?.id, profile, setProfile, workspace, workspaces, role, members, reloadMembers,
     contacts, contactsState, contactsError, reloadContacts, upsertContact, removeContact,
     memberName, toast, view, setView, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion,
-  }), [user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
+    quickShot, clearQuickShot,
+  }), [quickShot, clearQuickShot, user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
     reloadContacts, upsertContact, removeContact, memberName, toast, view, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion]);
 
   // ----- render -----
@@ -262,14 +268,33 @@ export default function App() {
           <button
             type="button"
             className={`tabbar-scan ${view === 'scan' ? 'is-active' : ''}`}
-            onClick={() => go('scan')}
+            onClick={() => {
+              go('scan');
+              // Open the camera in the same tap; it must run inside the user's gesture on iOS.
+              if (canWrite(role) && workspace) quickCam.current?.click();
+            }}
             aria-current={view === 'scan' ? 'page' : undefined}
+            aria-label="Scan a card with the camera"
           >
             <span className="tabbar-scan-btn"><Icon name="scan" size={24} strokeWidth={2} /></span>
             <span className="tabbar-label">Scan</span>
           </button>
           {isSuper && <TabbarItem icon="shield" label="Admin" active={view === 'admin'} onClick={() => go('admin')} />}
           <TabbarItem icon="user" label="Me" active={view === 'me'} onClick={() => go('me')} />
+          <input
+            ref={quickCam}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(e) => {
+              const f = e.target.files && e.target.files[0];
+              e.target.value = '';
+              if (f) setQuickShot({ file: f, at: Date.now() });
+            }}
+          />
         </nav>
       </div>
       <Toasts toasts={toasts} />
