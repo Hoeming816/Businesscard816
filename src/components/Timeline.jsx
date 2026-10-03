@@ -30,7 +30,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
     setEditing(null);
     await loadItems();
     if (bumped) await onContactChanged();
-    toast(saved ? 'Entry saved' : 'Saved');
+    toast('Saved');
   };
 
   const remove = async (i) => {

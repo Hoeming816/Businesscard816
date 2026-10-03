@@ -82,7 +82,7 @@ export default function ContactDetail({ contact, onClose }) {
         upsertContact(updated);
         reset(updated);
       }
-      toast('Contact saved');
+      toast('Saved');
     } catch (e) {
       toast(e.message, 'error');
     } finally {
@@ -133,7 +133,7 @@ export default function ContactDetail({ contact, onClose }) {
       if (updated) upsertContact(updated);
       setSide(which);
       setRetake(null);
-      const msg = old ? `New ${which} photo saved` : `${which === 'back' ? 'Back' : 'Front'} photo added and saved`;
+      const msg = old ? `Saved. New ${which} photo` : `Saved. ${which === 'back' ? 'Back' : 'Front'} photo added`;
       setPhotoNote(msg);
       toast(msg);
     } catch (e) {

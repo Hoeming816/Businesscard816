@@ -181,7 +181,7 @@ export default function Scan() {
     if (failures.length) {
       toast(`Contact saved, but ${failures.join('; ')}`, 'error');
     } else {
-      toast(`${contact.full_name || 'Contact'} saved to your cards`);
+      toast(`Saved. ${contact.full_name || 'The contact'} is in your cards.`);
     }
     reset();
   };
@@ -214,8 +214,8 @@ export default function Scan() {
     if (updated) upsertContact(updated);
     setSaving(false);
     const name = target.full_name || 'the contact';
-    if (failures.length) toast(`Updated ${name}, but ${failures.join('; ')}`, 'error');
-    else toast(`Updated ${name}. Notes and meetings were kept.`);
+    if (failures.length) toast(`Saved ${name}, but ${failures.join('; ')}`, 'error');
+    else toast(`Saved. ${name} is updated; notes and meetings were kept.`);
     reset();
   };
 
