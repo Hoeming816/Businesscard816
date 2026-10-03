@@ -22,6 +22,11 @@ export default function Scan() {
   const [saveError, setSaveError] = useState('');
 
   const row = useMemo(() => fromDraft(draft), [draft]);
+  // A save problem or question must be seen: bring it into view when it appears.
+  const saveMsgRef = useRef(null);
+  useEffect(() => {
+    if (saveError || pendingSave) saveMsgRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [saveError, pendingSave]);
   const dups = useMemo(() => findDuplicates(contacts, row), [contacts, row]);
   const hasContent = !!(row.full_name || row.company || row.emails.length || row.phones.length);
   // An existing card of yours for the same person: offer to update it instead of adding another.
@@ -274,9 +279,9 @@ export default function Scan() {
           )}
           <ContactForm draft={draft} setDraft={setDraft} contacts={contacts} />
 
-          {saveError && <p className="form-error" role="alert">{saveError}</p>}
+          {saveError && <p className="form-error" role="alert" ref={saveMsgRef}>{saveError}</p>}
           {pendingSave && !match && (
-            <div className="notice notice-warn confirm-dup" role="alertdialog" aria-label="Duplicate warning">
+            <div className="notice notice-warn confirm-dup" role="alertdialog" aria-label="Duplicate warning" ref={saveMsgRef}>
               <p>This looks like a card you already have. Save it anyway?</p>
               <div className="row-actions">
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => save(true)}>Save anyway</button>

@@ -944,7 +944,8 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   .dz-hint { font-size: 12px; text-align: center; padding: 0 6px; }
   .scan-form { padding: 16px 16px 0; }
   .scan-form .save-bar { margin: 0 -16px; padding: 10px 16px; }
-  .save-bar.sticky { position: sticky; bottom: calc(var(--tabbar-h) + var(--safe-b)); }
+  /* Extra room underneath so the raised Scan button in the tab bar never covers Save. */
+  .save-bar.sticky { position: sticky; bottom: calc(var(--tabbar-h) + var(--safe-b)); padding-bottom: 36px; }
   .save-bar .btn { flex: 1 1 auto; }
   .save-bar > .muted { flex-basis: 100%; }
 
@@ -1003,3 +1004,4 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .incoming-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 .incoming-more { margin: 10px 0 0; text-align: right; }
 .photo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.photo-note { flex-basis: 100%; margin: 2px 0 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-size: 13px; font-weight: 600; }

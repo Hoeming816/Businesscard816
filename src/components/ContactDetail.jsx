@@ -24,6 +24,7 @@ export default function ContactDetail({ contact, onClose }) {
   const retakeSide = useRef('front');
   const [retake, setRetake] = useState(null);
   const [retakeBusy, setRetakeBusy] = useState(''); // '' | 'loading' | 'saving'
+  const [photoNote, setPhotoNote] = useState(''); // confirmation shown under the photo after a retake
 
   const editable = canEditContact(contact, role, uid);
   // Only the fields the user changed, so updates made elsewhere (e.g. "Log
@@ -70,7 +71,10 @@ export default function ContactDetail({ contact, onClose }) {
   };
 
   const save = async () => {
-    if (!dirty) return;
+    if (!dirty) {
+      toast(photoNote ? 'Already saved. The new photo was saved when you tapped Crop.' : 'Everything is already saved.');
+      return;
+    }
     setSaving(true);
     try {
       const updated = await api.updateContact(contact.id, changes);
@@ -129,7 +133,9 @@ export default function ContactDetail({ contact, onClose }) {
       if (updated) upsertContact(updated);
       setSide(which);
       setRetake(null);
-      toast(old ? `${which === 'back' ? 'Back' : 'Front'} photo replaced` : 'Back photo added');
+      const msg = old ? `New ${which} photo saved` : `${which === 'back' ? 'Back' : 'Front'} photo added and saved`;
+      setPhotoNote(msg);
+      toast(msg);
     } catch (e) {
       toast(e.message || 'Could not replace the photo.', 'error');
     } finally {
@@ -188,6 +194,7 @@ export default function ContactDetail({ contact, onClose }) {
                   <Icon name="plus" size={15} /> Add back photo
                 </button>
               )}
+              {photoNote && <p className="photo-note" role="status"><Icon name="check" size={14} /> {photoNote}. Nothing else to save.</p>}
               <input
                 ref={retakeInput}
                 type="file"
@@ -319,7 +326,7 @@ export default function ContactDetail({ contact, onClose }) {
                   <div className={`save-bar ${dirty ? 'is-dirty' : ''}`}>
                     <span className="muted small">{dirty ? `${Object.keys(changes).length} unsaved change${Object.keys(changes).length === 1 ? '' : 's'}` : 'All changes saved'}</span>
                     <button type="button" className="btn btn-ghost" disabled={!dirty || saving} onClick={() => reset(contact)}>Discard</button>
-                    <button type="button" className="btn btn-primary" disabled={!dirty || saving} onClick={save}>{saving ? 'Saving…' : 'Save changes'}</button>
+                    <button type="button" className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save changes'}</button>
                   </div>
                 )}
               </>
