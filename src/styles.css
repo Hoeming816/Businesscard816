@@ -338,6 +338,9 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   display: grid; gap: 14px; padding: 40px 24px;
 }
 .auth-panel.center { justify-items: center; text-align: center; background: var(--surface); border-radius: 18px; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 36px 28px; }
+.auth-lockup { display: block; width: 240px; max-width: 70%; height: auto; }
+.auth-logo-dark { display: none; }
+@media (prefers-color-scheme: dark) { .auth-lockup { display: none; } .auth-logo-dark { display: block; } }
 .auth-panel .logo-mark { width: 52px; height: 52px; }
 .auth-panel .logo { gap: 12px; }
 .auth-panel .logo-word { font-size: 28px; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../context.js';
+import lockupUrl from '../assets/nomiqo-lockup.png';
 import { Icon, Logo } from './ui.jsx';
 
 export const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
@@ -71,7 +72,8 @@ export default function AuthScreen({ onSuspended }) {
         </div>
       </div>
       <div className="auth-panel">
-        <Logo byline tagline />
+        <img className="auth-lockup" src={lockupUrl} alt="Nomiqo by Aspencom. Scan. Organize. Connect." />
+        <span className="auth-logo-dark"><Logo byline tagline /></span>
         <h1 className="auth-title">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h1>
         <p className="muted auth-sub">
           {mode === 'signin'
