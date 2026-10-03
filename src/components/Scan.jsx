@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
 import CardCropper from './CardCropper.jsx';
-import { blankDraft, draftFromScan, fromDraft } from '../contactModel.js';
+import { blankDraft, draftFromScan, findSameName, fromDraft, overwritePatch } from '../contactModel.js';
 import { findDuplicates } from '../filters.js';
 import { canWrite } from '../perms.js';
 import ContactForm from './ContactForm.jsx';
@@ -16,13 +16,17 @@ export default function Scan() {
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState('');
   const [readDone, setReadDone] = useState(false);
-  const [pendingSave, setPendingSave] = useState(null); // 'shared' | 'private' awaiting duplicate confirmation
+  const [pendingSave, setPendingSave] = useState(false); // awaiting duplicate confirmation
+  const [keepBoth, setKeepBoth] = useState(''); // id of a same-name card the user chose not to update
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   const row = useMemo(() => fromDraft(draft), [draft]);
   const dups = useMemo(() => findDuplicates(contacts, row), [contacts, row]);
   const hasContent = !!(row.full_name || row.company || row.emails.length || row.phones.length);
+  // An existing card of yours for the same person: offer to update it instead of adding another.
+  const sameName = useMemo(() => findSameName(contacts, row.full_name, uid), [contacts, row.full_name, uid]);
+  const match = sameName[0] && sameName[0].id !== keepBoth ? sameName[0] : null;
 
   // Every new photo opens the cropper first: { side, canvas, quad, detected }.
   const [crop, setCrop] = useState(null);
@@ -119,7 +123,8 @@ export default function Scan() {
     setDraft(blankDraft());
     setReadDone(false);
     setReadError('');
-    setPendingSave(null);
+    setPendingSave(false);
+    setKeepBoth('');
     setSaveError('');
   };
 
@@ -133,7 +138,7 @@ export default function Scan() {
       setPendingSave(true);
       return;
     }
-    setPendingSave(null);
+    setPendingSave(false);
     setSaving(true);
     let contact;
     try {
@@ -176,6 +181,39 @@ export default function Scan() {
     reset();
   };
 
+  // Overwrite the existing card's details and photos; notes, meetings and pipeline stay.
+  const updateExisting = async (target) => {
+    setSaveError('');
+    setSaving(true);
+    const patch = overwritePatch(target, row);
+    const failures = [];
+    const replaced = [];
+    for (const [side, img] of [['front', front], ['back', back]]) {
+      if (!img) continue;
+      try {
+        patch[`${side}_path`] = await api.uploadCardPhoto(workspace.id, target.id, side, img.blob);
+        if (target[`${side}_path`]) replaced.push(target[`${side}_path`]);
+      } catch (e) {
+        failures.push(`${side} photo: ${e.message}`);
+      }
+    }
+    let updated;
+    try {
+      updated = Object.keys(patch).length ? await api.updateContact(target.id, patch) : target;
+    } catch (e) {
+      setSaveError(e.message);
+      setSaving(false);
+      return;
+    }
+    if (replaced.length) api.removeStorageObjects('cards', replaced).catch(() => {});
+    if (updated) upsertContact(updated);
+    setSaving(false);
+    const name = target.full_name || 'the contact';
+    if (failures.length) toast(`Updated ${name}, but ${failures.join('; ')}`, 'error');
+    else toast(`Updated ${name}. Notes and meetings were kept.`);
+    reset();
+  };
+
   return (
     <div className="page scan">
       {crop && (
@@ -213,7 +251,18 @@ export default function Scan() {
 
         <section className="scan-form" aria-labelledby="review-h">
           <h2 id="review-h" className="h3">{readDone ? 'Review and correct' : 'Card details'}</h2>
-          {dups.length > 0 && (
+          {match && (
+            <div className="notice notice-info same-person" role="status">
+              <Icon name="history" size={16} />
+              <div>
+                <strong>You already have a card for {match.full_name}</strong>
+                {[match.job_title, match.company].filter(Boolean).length > 0 && <> ({[match.job_title, match.company].filter(Boolean).join(' · ')})</>}.
+                {' '}Update it with this card? The new details and photo replace the old ones; notes and meetings are kept.
+                {sameName.length > 1 && <span className="block muted small">You have {sameName.length} cards with this name; this updates the most recent one.</span>}
+              </div>
+            </div>
+          )}
+          {!match && dups.length > 0 && (
             <div className="notice notice-warn" role="status">
               <Icon name="alert" size={16} />
               <div>
@@ -226,7 +275,7 @@ export default function Scan() {
           <ContactForm draft={draft} setDraft={setDraft} contacts={contacts} />
 
           {saveError && <p className="form-error" role="alert">{saveError}</p>}
-          {pendingSave && (
+          {pendingSave && !match && (
             <div className="notice notice-warn confirm-dup" role="alertdialog" aria-label="Duplicate warning">
               <p>This looks like a card you already have. Save it anyway?</p>
               <div className="row-actions">
@@ -238,9 +287,20 @@ export default function Scan() {
           )}
           <div className="save-bar sticky is-dirty">
             <button type="button" className="btn btn-ghost" onClick={reset} disabled={saving}>Clear</button>
-            <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>
-              {saving ? 'Saving…' : <><Icon name="check" size={16} /> Save card</>}
-            </button>
+            {match ? (
+              <>
+                <button type="button" className="btn btn-outline" onClick={() => { setKeepBoth(match.id); save(true); }} disabled={saving}>
+                  Keep both
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => updateExisting(match)} disabled={saving}>
+                  {saving ? 'Updating…' : <><Icon name="refresh" size={16} /> Update existing</>}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>
+                {saving ? 'Saving…' : <><Icon name="check" size={16} /> Save card</>}
+              </button>
+            )}
           </div>
         </section>
       </div>
