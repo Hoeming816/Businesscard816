@@ -106,16 +106,17 @@ function iso(dateStr, hour = 9) {
 /** Build the seed relative to `today` so the date filters always have data. */
 export function buildContacts(today = toISODate(new Date())) {
   const createdOffsets = [0, 0, -1, -2, -3, -5, -8, -12, -15, -20, -26, -33, -40, -47, -55, -61, -70, -78, -85, -93, -101, -110, -118, -126, -135, -144, -150, -158, -165, -172, -180, -190, -199, -210, -222, -235, -248, -260, -275, -290];
+  const createdAt = (i) => createdOffsets[i] ?? -300 - i * 7;
   const lastOffsets = [0, -2, -5, null, -9, -14, -21, null, -40, -3, -60, -250, -18, null, -1, -7, -11, -4, -32, -6, -95, null, -120, -8, -27, null, -16, -200, null, -10, -300, null, -45, -70, -13, -24, null, -88, null, -35];
   const followOffsets = [7, -3, 2, 0, null, -10, null, 30, 0, 5, null, null, 14, null, 21, null, -1, 3, null, -5, 60, null, null, 10, null, 1, -2, null, 0, 4, null, null, 45, null, 12, null, 9, null, null, 6];
-  const owners = (i) => (i % 5 === 3 ? 'u-maria' : i % 11 === 7 ? 'u-jun' : ME);
+  const owners = (i) => (i === 3 ? 'u-maria' : ME); // cards are owner-only; Maria's one is offered to Alex
 
   return P.map((p, i) => {
     const [full_name, job_title, company, department, domain, industry, contact_type, business_category,
       job_function, seniority, city, region, country, relationship, lead_status, lead_source, priority,
       opportunities, tags] = p;
     const id = `c-${String(i + 1).padStart(3, '0')}`;
-    const created = addDays(today, createdOffsets[i]);
+    const created = addDays(today, createdAt(i));
     const phones = [{ label: 'Mobile', number: phoneFor(country, i, 'mobile') }];
     if (i % 3 !== 2) phones.push({ label: i % 4 === 0 ? 'Direct' : 'Office', number: phoneFor(country, i, 'office') });
     const website = `www.${domain}.example.com`;
@@ -125,7 +126,7 @@ export function buildContacts(today = toISODate(new Date())) {
       id,
       workspace_id: 'w-north',
       created_by: owners(i),
-      is_private: i === 9 || i === 22 || i === 33,
+      is_private: true,
       full_name, job_title, company, department: department || null,
       emails: [email],
       phones,
@@ -139,7 +140,7 @@ export function buildContacts(today = toISODate(new Date())) {
       lead_status: lead_status || null,
       lead_source: lead_source || null,
       priority: priority || null,
-      last_contacted_on: lastOffsets[i] == null ? null : addDays(today, Math.max(lastOffsets[i], createdOffsets[i])),
+      last_contacted_on: lastOffsets[i] == null ? null : addDays(today, Math.max(lastOffsets[i], createdAt(i))),
       next_follow_up_on: followOffsets[i] == null ? null : addDays(today, followOffsets[i]),
       notes: i % 4 === 0 ? `Met at the ${['Manila Telco Expo', 'Singapore Smart Building Week', 'KL Network Summit'][i % 3]}. Interested in a site survey.` : null,
       front_path: `demo/${id}/front.svg`,
@@ -156,7 +157,7 @@ export function buildHarbourContacts(today = toISODate(new Date())) {
     ['Lina Wong', 'Procurement Lead', 'Sentosa Marine Services', 'Logistics', 'Singapore', 'Singapore'],
     ['Imran Shah', 'Site Supervisor', 'Changi Civil Works', 'Construction', 'Singapore', 'Singapore'],
   ].map(([full_name, job_title, company, industry, city, country], i) => ({
-    id: `h-${i + 1}`, workspace_id: 'w-harbour', created_by: 'u-siti', is_private: false,
+    id: `h-${i + 1}`, workspace_id: 'w-harbour', created_by: ME, is_private: true,
     full_name, job_title, company, department: null,
     emails: [emailFor(full_name, company.toLowerCase().split(' ')[0])], phones: [{ label: 'Mobile', number: `+65 9555 ${2100 + i * 13}` }],
     website: null, address: null, city, region: null, country, card_text: null,

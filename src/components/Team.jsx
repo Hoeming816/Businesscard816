@@ -4,9 +4,9 @@ import { Icon, Avatar, Pill, ConfirmButton, formatDate } from './ui.jsx';
 
 export const ROLES = ['admin', 'editor', 'viewer'];
 const ROLE_HELP = {
-  admin: 'Manages members, edits or deletes any shared card',
-  editor: 'Scans and edits shared cards, deletes own cards',
-  viewer: 'Views, searches and exports shared cards',
+  admin: 'Manages members, and keeps their own cards',
+  editor: 'Scans, keeps and shares their own cards',
+  viewer: "Can't add or receive cards",
 };
 
 export function memberStatus(m) {
@@ -199,7 +199,7 @@ export default function Team() {
       {!isOwner && (
         <section className="panel danger-zone">
           <h2 className="h3">Leave workspace</h2>
-          <p className="help">You will lose access to all shared cards in {workspace.name}. Your private cards here stay in the workspace but nobody can see them.</p>
+          <p className="help">Your cards in {workspace.name} stay there, and nobody else can see them.</p>
           <ConfirmButton icon="logout" confirmLabel="Leave workspace" message={`Leave ${workspace.name}?`} onConfirm={leave}>
             Leave workspace
           </ConfirmButton>

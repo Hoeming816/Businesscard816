@@ -82,3 +82,35 @@ export function diff(contact, row) {
   }
   return out;
 }
+
+/** Same person: names equal ignoring case, spacing and full-width forms. */
+export const nameKey = (v) => String(v ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** The caller's existing cards for the same person, most recently updated first. */
+export function findSameName(contacts, name, uid) {
+  const key = nameKey(name);
+  if (!key) return [];
+  return contacts
+    .filter((c) => c.created_by === uid && nameKey(c.full_name) === key)
+    .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')));
+}
+
+// Kept from the existing contact when it has them: your own follow-up work, not the card.
+const KEPT_FIELDS = ['relationship', 'lead_status', 'lead_source', 'priority', 'notes', 'last_contacted_on', 'next_follow_up_on'];
+
+/**
+ * Patch that overwrites an existing contact's card details with a newly scanned
+ * row (from fromDraft). The new card wins wherever it has a value; blanks on the
+ * new card keep the old value. Notes, pipeline and dates are kept.
+ */
+export function overwritePatch(existing, row) {
+  const patch = {};
+  for (const [k, v] of Object.entries(row)) {
+    const empty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
+    if (empty) continue;
+    if (KEPT_FIELDS.includes(k) && existing[k] != null && existing[k] !== '') continue;
+    if (k === 'full_name' && nameKey(v) === nameKey(existing.full_name)) continue; // same person: keep how the name was written
+    if (JSON.stringify(existing[k] ?? null) !== JSON.stringify(v)) patch[k] = v;
+  }
+  return patch;
+}

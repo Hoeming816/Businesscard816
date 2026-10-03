@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toDraft, fromDraft, draftFromScan, diff, blankDraft } from './contactModel.js';
+import { toDraft, fromDraft, draftFromScan, diff, blankDraft, findSameName, overwritePatch } from './contactModel.js';
 
 describe('contact drafts', () => {
   it('round-trips a contact', () => {
@@ -29,5 +29,29 @@ describe('contact drafts', () => {
   });
   it('diff returns only changed columns', () => {
     expect(diff({ a: 1, b: [1], c: null }, { a: 1, b: [2], c: undefined })).toEqual({ b: [2] });
+  });
+});
+
+describe('overwriting an existing card', () => {
+  const old = {
+    id: 'c1', created_by: 'me', full_name: 'Gabriel Uy', job_title: 'Manager', company: 'Old Co', city: 'Cebu',
+    emails: ['old@x.example'], phones: [{ label: 'Mobile', number: '1' }], notes: 'met at expo', lead_status: 'Won',
+    tags: ['a'], updated_at: '2026-01-01',
+  };
+  it('matches the same name ignoring case, spaces and full-width letters, own cards only', () => {
+    const list = [old, { ...old, id: 'c2', created_by: 'other' }, { ...old, id: 'c3', full_name: 'Gabriel Uy Jr' }];
+    expect(findSameName(list, '  gabriel   UY ', 'me').map((c) => c.id)).toEqual(['c1']);
+    expect(findSameName(list, 'Ｇａｂｒｉｅｌ Uy', 'me').map((c) => c.id)).toEqual(['c1']);
+    expect(findSameName(list, '', 'me')).toEqual([]);
+  });
+  it('new card details win, blanks keep the old value, notes and pipeline are kept', () => {
+    const row = fromDraft({ ...blankDraft(), full_name: 'gabriel  uy', job_title: 'Founder', company: 'Uy Smart', emails: ['new@x.example'], notes: 'typed', lead_status: 'New' });
+    const p = overwritePatch(old, row);
+    expect(p).toMatchObject({ job_title: 'Founder', company: 'Uy Smart', emails: ['new@x.example'] });
+    expect(p).not.toHaveProperty('city');
+    expect(p).not.toHaveProperty('notes');
+    expect(p).not.toHaveProperty('lead_status');
+    expect(p).not.toHaveProperty('full_name');
+    expect(p).not.toHaveProperty('phones');
   });
 });

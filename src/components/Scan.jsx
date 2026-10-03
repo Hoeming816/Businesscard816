@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
 import CardCropper from './CardCropper.jsx';
-import { blankDraft, draftFromScan, fromDraft } from '../contactModel.js';
+import { blankDraft, draftFromScan, findSameName, fromDraft, overwritePatch } from '../contactModel.js';
 import { findDuplicates } from '../filters.js';
 import { canWrite } from '../perms.js';
 import ContactForm from './ContactForm.jsx';
@@ -16,13 +16,17 @@ export default function Scan() {
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState('');
   const [readDone, setReadDone] = useState(false);
-  const [pendingSave, setPendingSave] = useState(null); // 'shared' | 'private' awaiting duplicate confirmation
+  const [pendingSave, setPendingSave] = useState(false); // awaiting duplicate confirmation
+  const [keepBoth, setKeepBoth] = useState(''); // id of a same-name card the user chose not to update
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   const row = useMemo(() => fromDraft(draft), [draft]);
   const dups = useMemo(() => findDuplicates(contacts, row), [contacts, row]);
   const hasContent = !!(row.full_name || row.company || row.emails.length || row.phones.length);
+  // An existing card of yours for the same person: offer to update it instead of adding another.
+  const sameName = useMemo(() => findSameName(contacts, row.full_name, uid), [contacts, row.full_name, uid]);
+  const match = sameName[0] && sameName[0].id !== keepBoth ? sameName[0] : null;
 
   // Every new photo opens the cropper first: { side, canvas, quad, detected }.
   const [crop, setCrop] = useState(null);
@@ -37,13 +41,15 @@ export default function Scan() {
     set(img);
   };
 
-  const startCrop = async (file, side) => {
+  // autoRead: run Read card straight after cropping (new card from the Scan button,
+  // or a front photo on an empty form).
+  const startCrop = async (file, side, autoRead = false) => {
     setLoadingSide(side);
     try {
       const canvas = await loadPhoto(file);
       if (!alive.current) return;
       const found = findCard(canvas);
-      setCrop({ side, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found });
+      setCrop({ side, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found, autoRead });
       setReadError('');
     } catch (e) {
       toast(e.message || 'Could not use that image.', 'error');
@@ -59,6 +65,7 @@ export default function Scan() {
       if (!alive.current) return;
       setSide(crop.side, img);
       setCrop(null);
+      if (crop.side === 'Front' && crop.autoRead) read(img);
     } catch (e) {
       toast(e.message || 'Could not crop that photo.', 'error');
     } finally {
@@ -66,12 +73,15 @@ export default function Scan() {
     }
   };
 
-  // A photo taken from the Scan tab button goes to the first empty side.
+  // A photo taken with the Scan tab button always starts a new card.
   useEffect(() => {
     if (!quickShot) return;
     const { file } = quickShot;
     clearQuickShot();
-    startCrop(file, !front ? 'Front' : !back ? 'Back' : 'Front');
+    const dirty = front || back || hasContent;
+    if (dirty && !window.confirm('Start a new card with this photo? The card you were working on has not been saved and will be cleared.')) return;
+    if (dirty) reset();
+    startCrop(file, 'Front', true);
   }, [quickShot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
@@ -89,12 +99,12 @@ export default function Scan() {
     );
   }
 
-  const read = async () => {
-    if (!front) return;
+  const read = async (frontImg = front, backImg = back) => {
+    if (!frontImg) return;
     setReading(true);
     setReadError('');
     try {
-      const card = await api.scanCard(front.base64, back?.base64 || null);
+      const card = await api.scanCard(frontImg.base64, backImg?.base64 || null);
       setDraft((d) => draftFromScan(card, d));
       setReadDone(true);
       toast('Card read. Check the details before saving.');
@@ -106,26 +116,29 @@ export default function Scan() {
   };
 
   const reset = () => {
+    if (front?.url) URL.revokeObjectURL(front.url);
+    if (back?.url) URL.revokeObjectURL(back.url);
     setFront(null);
     setBack(null);
     setDraft(blankDraft());
     setReadDone(false);
     setReadError('');
-    setPendingSave(null);
+    setPendingSave(false);
+    setKeepBoth('');
     setSaveError('');
   };
 
-  const save = async (visibility, force = false) => {
+  const save = async (force = false) => {
     setSaveError('');
     if (!hasContent) {
       setSaveError('Add at least a name, company, email or phone before saving.');
       return;
     }
     if (dups.length && !force) {
-      setPendingSave(visibility);
+      setPendingSave(true);
       return;
     }
-    setPendingSave(null);
+    setPendingSave(false);
     setSaving(true);
     let contact;
     try {
@@ -133,7 +146,7 @@ export default function Scan() {
         ...row,
         workspace_id: workspace.id,
         created_by: uid,
-        is_private: visibility === 'private',
+        is_private: true,
       });
     } catch (e) {
       setSaveError(e.message);
@@ -163,8 +176,41 @@ export default function Scan() {
     if (failures.length) {
       toast(`Contact saved, but ${failures.join('; ')}`, 'error');
     } else {
-      toast(`${contact.full_name || 'Contact'} saved ${visibility === 'private' ? 'as private' : 'to ' + workspace.name}`);
+      toast(`${contact.full_name || 'Contact'} saved to your cards`);
     }
+    reset();
+  };
+
+  // Overwrite the existing card's details and photos; notes, meetings and pipeline stay.
+  const updateExisting = async (target) => {
+    setSaveError('');
+    setSaving(true);
+    const patch = overwritePatch(target, row);
+    const failures = [];
+    const replaced = [];
+    for (const [side, img] of [['front', front], ['back', back]]) {
+      if (!img) continue;
+      try {
+        patch[`${side}_path`] = await api.uploadCardPhoto(workspace.id, target.id, side, img.blob);
+        if (target[`${side}_path`]) replaced.push(target[`${side}_path`]);
+      } catch (e) {
+        failures.push(`${side} photo: ${e.message}`);
+      }
+    }
+    let updated;
+    try {
+      updated = Object.keys(patch).length ? await api.updateContact(target.id, patch) : target;
+    } catch (e) {
+      setSaveError(e.message);
+      setSaving(false);
+      return;
+    }
+    if (replaced.length) api.removeStorageObjects('cards', replaced).catch(() => {});
+    if (updated) upsertContact(updated);
+    setSaving(false);
+    const name = target.full_name || 'the contact';
+    if (failures.length) toast(`Updated ${name}, but ${failures.join('; ')}`, 'error');
+    else toast(`Updated ${name}. Notes and meetings were kept.`);
     reset();
   };
 
@@ -190,9 +236,9 @@ export default function Scan() {
 
       <div className="scan-grid">
         <section className="scan-photos" aria-label="Card photos">
-          <PhotoSlot label="Front" required busy={loadingSide === 'Front'} value={front} onPick={(f) => startCrop(f, 'Front')} onChange={setFront} />
+          <PhotoSlot label="Front" required busy={loadingSide === 'Front'} value={front} onPick={(f) => startCrop(f, 'Front', !hasContent)} onChange={setFront} />
           <PhotoSlot label="Back" busy={loadingSide === 'Back'} value={back} onPick={(f) => startCrop(f, 'Back')} onChange={setBack} />
-          <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={read}>
+          <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={() => read()}>
             {reading ? <><Spinner /> Reading card…</> : <><Icon name="sparkles" size={18} /> {readDone ? 'Read card again' : 'Read card'}</>}
           </button>
           {!front && <p className="help center">A front photo is needed for AI reading.</p>}
@@ -205,7 +251,18 @@ export default function Scan() {
 
         <section className="scan-form" aria-labelledby="review-h">
           <h2 id="review-h" className="h3">{readDone ? 'Review and correct' : 'Card details'}</h2>
-          {dups.length > 0 && (
+          {match && (
+            <div className="notice notice-info same-person" role="status">
+              <Icon name="history" size={16} />
+              <div>
+                <strong>You already have a card for {match.full_name}</strong>
+                {[match.job_title, match.company].filter(Boolean).length > 0 && <> ({[match.job_title, match.company].filter(Boolean).join(' · ')})</>}.
+                {' '}Update it with this card? The new details and photo replace the old ones; notes and meetings are kept.
+                {sameName.length > 1 && <span className="block muted small">You have {sameName.length} cards with this name; this updates the most recent one.</span>}
+              </div>
+            </div>
+          )}
+          {!match && dups.length > 0 && (
             <div className="notice notice-warn" role="status">
               <Icon name="alert" size={16} />
               <div>
@@ -218,11 +275,11 @@ export default function Scan() {
           <ContactForm draft={draft} setDraft={setDraft} contacts={contacts} />
 
           {saveError && <p className="form-error" role="alert">{saveError}</p>}
-          {pendingSave && (
+          {pendingSave && !match && (
             <div className="notice notice-warn confirm-dup" role="alertdialog" aria-label="Duplicate warning">
               <p>This looks like a card you already have. Save it anyway?</p>
               <div className="row-actions">
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => save(pendingSave, true)}>Save anyway</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => save(true)}>Save anyway</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPendingSave(null)}>Cancel</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setView('contacts')}>Go to contacts</button>
               </div>
@@ -230,12 +287,20 @@ export default function Scan() {
           )}
           <div className="save-bar sticky is-dirty">
             <button type="button" className="btn btn-ghost" onClick={reset} disabled={saving}>Clear</button>
-            <button type="button" className="btn btn-outline" onClick={() => save('private')} disabled={saving}>
-              <Icon name="lock" size={16} /> Save as private
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => save('shared')} disabled={saving}>
-              {saving ? 'Saving…' : <><Icon name="users" size={16} /> Save to workspace</>}
-            </button>
+            {match ? (
+              <>
+                <button type="button" className="btn btn-outline" onClick={() => { setKeepBoth(match.id); save(true); }} disabled={saving}>
+                  Keep both
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => updateExisting(match)} disabled={saving}>
+                  {saving ? 'Updating…' : <><Icon name="refresh" size={16} /> Update existing</>}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>
+                {saving ? 'Saving…' : <><Icon name="check" size={16} /> Save card</>}
+              </button>
+            )}
           </div>
         </section>
       </div>

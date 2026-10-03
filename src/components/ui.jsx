@@ -39,6 +39,8 @@ const PATHS = {
   camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
   upload: 'M12 16V5M7 9.5l5-5 5 5M5 20h14',
   flip: 'M4 9h13l-3-3M20 15H7l3 3',
+  refresh: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4',
+  send: 'M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5 21 3z',
   history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   play: 'M8 5l11 7-11 7z',
@@ -102,6 +104,9 @@ export function Avatar({ name, size = 32 }) {
 // Modal dialog: role=dialog, aria-modal, Escape to close, focus handling
 // ---------------------------------------------------------------------------
 
+// Open modals, innermost last: only the top one answers Escape and traps Tab.
+const modalStack = [];
+
 export function Modal({ title, labelledBy, onClose, children, className = '', wide = false }) {
   const ref = useRef(null);
   const closeRef = useRef(onClose);
@@ -112,7 +117,10 @@ export function Modal({ title, labelledBy, onClose, children, className = '', wi
     const el = ref.current;
     const first = el && el.querySelector('[data-autofocus]');
     (first || el)?.focus({ preventScroll: true });
+    const token = {};
+    modalStack.push(token);
     const onKey = (e) => {
+      if (modalStack[modalStack.length - 1] !== token) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         closeRef.current();
@@ -130,7 +138,8 @@ export function Modal({ title, labelledBy, onClose, children, className = '', wi
     document.body.classList.add('modal-open');
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.classList.remove('modal-open');
+      modalStack.splice(modalStack.indexOf(token), 1);
+      if (!modalStack.length) document.body.classList.remove('modal-open');
       if (prev && prev.focus) prev.focus({ preventScroll: true });
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

@@ -1,20 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { toDraft, fromDraft, diff } from '../contactModel.js';
 import { followUpState, todayISO } from '../filters.js';
-import { canEditContact, canDeleteContact, canToggleVisibility, canTakePrivate, canAddInteraction } from '../perms.js';
+import { canEditContact, canDeleteContact, canAddInteraction } from '../perms.js';
 import ContactForm from './ContactForm.jsx';
 import Timeline from './Timeline.jsx';
-import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, formatDate, initials } from './ui.jsx';
+import SharePanel from './SharePanel.jsx';
+import CardCropper from './CardCropper.jsx';
+import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
+import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, formatDate, initials } from './ui.jsx';
 
 export default function ContactDetail({ contact, onClose }) {
-  const { api, uid, role, contacts, upsertContact, removeContact, memberName, toast, ensureSigned, signed } = useApp();
+  const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed } = useApp();
   const [tab, setTab] = useState('details');
   const [side, setSide] = useState('front');
   const [base, setBase] = useState(() => toDraft(contact)); // what editing started from
   const [draft, setDraft] = useState(base);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  // Retaking a card photo: camera -> crop -> replace. { side, canvas, quad, detected }
+  const retakeInput = useRef(null);
+  const retakeSide = useRef('front');
+  const [retake, setRetake] = useState(null);
+  const [retakeBusy, setRetakeBusy] = useState(''); // '' | 'loading' | 'saving'
 
   const editable = canEditContact(contact, role, uid);
   // Only the fields the user changed, so updates made elsewhere (e.g. "Log
@@ -88,6 +97,46 @@ export default function ContactDetail({ contact, onClose }) {
     }
   };
 
+  const pickRetake = (which) => {
+    retakeSide.current = which;
+    retakeInput.current?.click();
+  };
+
+  const startRetake = async (file) => {
+    setRetakeBusy('loading');
+    try {
+      const canvas = await loadPhoto(file);
+      const found = findCard(canvas);
+      setRetake({ side: retakeSide.current, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found });
+    } catch (e) {
+      toast(e.message || 'Could not use that image.', 'error');
+    } finally {
+      setRetakeBusy('');
+    }
+  };
+
+  // Replace the photo only; the card details are left as they are.
+  const finishRetake = async (quad) => {
+    const which = retake.side;
+    setRetakeBusy('saving');
+    try {
+      const img = quad ? await cropToCard(retake.canvas, quad) : await wholePhoto(retake.canvas);
+      const old = contact[`${which}_path`];
+      const path = await api.uploadCardPhoto(contact.workspace_id, contact.id, which, img.blob);
+      const updated = await api.updateContact(contact.id, { [`${which}_path`]: path });
+      if (img.url) URL.revokeObjectURL(img.url);
+      if (old) api.removeStorageObjects('cards', [old]).catch(() => {});
+      if (updated) upsertContact(updated);
+      setSide(which);
+      setRetake(null);
+      toast(old ? `${which === 'back' ? 'Back' : 'Front'} photo replaced` : 'Back photo added');
+    } catch (e) {
+      toast(e.message || 'Could not replace the photo.', 'error');
+    } finally {
+      setRetakeBusy('');
+    }
+  };
+
   const close = () => {
     if (dirty && !window.confirm('Discard unsaved changes to this contact?')) return;
     onClose();
@@ -128,6 +177,45 @@ export default function ContactDetail({ contact, onClose }) {
               </div>
             )}
           </div>
+          {editable && (
+            <div className="photo-actions">
+              <button type="button" className="btn btn-outline btn-sm" disabled={!!retakeBusy} onClick={() => pickRetake(side === 'back' && contact.back_path ? 'back' : 'front')}>
+                {retakeBusy === 'loading' ? <Spinner /> : <Icon name="camera" size={15} />}{' '}
+                {(side === 'back' && contact.back_path) ? 'Retake back photo' : contact.front_path ? 'Retake front photo' : 'Add card photo'}
+              </button>
+              {contact.front_path && !contact.back_path && (
+                <button type="button" className="btn btn-ghost btn-sm" disabled={!!retakeBusy} onClick={() => pickRetake('back')}>
+                  <Icon name="plus" size={15} /> Add back photo
+                </button>
+              )}
+              <input
+                ref={retakeInput}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  const f = e.target.files && e.target.files[0];
+                  e.target.value = '';
+                  if (f) startRetake(f);
+                }}
+              />
+            </div>
+          )}
+          {retake && (
+            <CardCropper
+              side={retake.side === 'back' ? 'Back' : 'Front'}
+              canvas={retake.canvas}
+              initialQuad={retake.quad}
+              detected={retake.detected}
+              busy={retakeBusy === 'saving'}
+              onCrop={finishRetake}
+              onSkip={() => finishRetake(null)}
+              onCancel={() => setRetake(null)}
+            />
+          )}
 
           <div className="facts">
             <h2 id={titleId} className="detail-name">{contact.full_name || <em className="muted">No name</em>}</h2>
@@ -179,14 +267,10 @@ export default function ContactDetail({ contact, onClose }) {
             <dl className="meta">
               <div><dt>Last contacted</dt><dd>{contact.last_contacted_on ? formatDate(contact.last_contacted_on) : 'Never'}</dd></div>
               <div><dt>Next follow-up</dt><dd>{contact.next_follow_up_on ? formatDate(contact.next_follow_up_on) : 'None'}</dd></div>
-              <div><dt>Added</dt><dd>{formatDate(contact.created_at)} by {contact.created_by === uid ? 'you' : memberName(contact.created_by)}</dd></div>
+              <div><dt>Added</dt><dd>{formatDate(contact.created_at)}</dd></div>
               <div>
                 <dt>Visibility</dt>
-                <dd>
-                  {contact.is_private
-                    ? <span className="vis"><Icon name="lock" size={14} /> Private: only you can see it</span>
-                    : <span className="vis"><Icon name="users" size={14} /> Shared with the workspace</span>}
-                </dd>
+                <dd><span className="vis"><Icon name="lock" size={14} /> Only you can see it</span></dd>
               </div>
             </dl>
 
@@ -197,22 +281,10 @@ export default function ContactDetail({ contact, onClose }) {
                   <Icon name="check" size={16} /> {contact.last_contacted_on === today ? 'Contacted today' : 'Log contact today'}
                 </button>
               )}
-              {canToggleVisibility(contact, role, uid) && (
-                <button type="button" className="btn btn-outline" disabled={busy}
-                  onClick={() => patch({ is_private: !contact.is_private }, contact.is_private ? 'Card shared with the workspace' : 'Card is now private')}>
-                  <Icon name={contact.is_private ? 'unlock' : 'lock'} size={16} /> {contact.is_private ? 'Share with workspace' : 'Make private'}
+              {editable && (
+                <button type="button" className={`btn btn-outline ${sharing ? 'has-active' : ''}`} aria-expanded={sharing} onClick={() => setSharing((v) => !v)}>
+                  <Icon name="send" size={16} /> Share
                 </button>
-              )}
-              {canTakePrivate(contact, role, uid) && (
-                <ConfirmButton
-                  className="btn btn-outline"
-                  icon="lock"
-                  confirmLabel="Take private"
-                  message={`${memberName(contact.created_by)} will lose access to this card, its photos and notes. You become its owner.`}
-                  onConfirm={() => patch({ is_private: true, created_by: uid }, 'Card taken private. You now own it.')}
-                >
-                  Take private
-                </ConfirmButton>
               )}
               {canDeleteContact(contact, role, uid) && (
                 <ConfirmButton icon="trash" confirmLabel="Delete card" message="Delete this card, its photos, notes and recordings?" onConfirm={del}>
@@ -220,6 +292,7 @@ export default function ContactDetail({ contact, onClose }) {
                 </ConfirmButton>
               )}
             </div>
+            {sharing && <SharePanel contact={contact} onClose={() => setSharing(false)} />}
           </div>
         </div>
 

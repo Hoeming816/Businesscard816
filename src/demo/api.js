@@ -24,7 +24,20 @@ const db = {
   contacts: [...buildContacts(), ...buildHarbourContacts()],
   interactions: buildInteractions(),
   blobs: new Map(), // storage path -> object URL
+  shares: [],
 };
+// One card waiting for Alex, so the demo shows the accept prompt.
+{
+  const c = db.contacts.find((x) => x.workspace_id === 'w-north' && x.created_by === 'u-maria' && !x.is_private)
+    || db.contacts.find((x) => x.workspace_id === 'w-north');
+  if (c) {
+    db.shares.push({
+      id: 's-welcome', workspace_id: 'w-north', contact_id: c.id, sender_id: 'u-maria', recipient_id: ME, status: 'pending',
+      contact_name: c.full_name || '', contact_title: c.job_title || null, contact_company: c.company || null,
+      new_contact_id: null, created_at: now(), responded_at: null,
+    });
+  }
+}
 const listeners = new Set();
 
 function deny(msg = 'You do not have permission to do that.') {
@@ -36,7 +49,7 @@ function roleIn(ws) {
   const w = db.workspaces.find((x) => x.id === ws);
   return m && w && w.status === 'active' ? m.role : null;
 }
-const visible = (c) => roleIn(c.workspace_id) && (!c.is_private || c.created_by === uid());
+const visible = (c) => roleIn(c.workspace_id) && c.created_by === uid(); // owner-only, as in 0004
 const profile = (id) => db.profiles.find((p) => p.id === id);
 
 export const usernameToEmail = (u) => `${u}@demo.cardfile.app`;
@@ -178,8 +191,8 @@ export async function insertContact(row) {
   const r = roleIn(row.workspace_id);
   if (r !== 'admin' && r !== 'editor') deny();
   const c = {
-    emails: [], phones: [], opportunities: [], tags: [], is_private: false,
-    ...clone(row), id: newId('c'), created_by: uid(), created_at: now(), updated_at: now(),
+    emails: [], phones: [], opportunities: [], tags: [],
+    ...clone(row), is_private: true, id: newId('c'), created_by: uid(), created_at: now(), updated_at: now(),
   };
   db.contacts.push(c);
   return clone(c);
@@ -188,11 +201,8 @@ export async function updateContact(id, patch) {
   await tick();
   const c = db.contacts.find((x) => x.id === id);
   if (!c || !canEditContact(c, roleIn(c.workspace_id), uid())) deny();
-  if (patch.created_by && patch.created_by !== c.created_by) {
-    if (!(roleIn(c.workspace_id) === 'admin' && !c.is_private && patch.is_private && patch.created_by === uid())) {
-      deny('card ownership can only change when an admin takes a shared card private');
-    }
-  }
+  if (patch.created_by && patch.created_by !== c.created_by) deny('a card cannot change owner');
+  if (patch.is_private === false) deny('cards are only visible to their owner');
   Object.assign(c, clone(patch), { updated_at: now() });
   return visible(c) ? clone(c) : null;
 }
@@ -211,6 +221,67 @@ export async function uploadCardPhoto(ws, contactId, side, blob) {
 }
 export async function removeStorageObjects(_bucket, paths) {
   for (const p of paths) db.blobs.delete(p);
+}
+
+// --------------------------------------------------------------------------- sharing
+const canReceive = (ws, member) => {
+  const m = db.members.find((x) => x.workspace_id === ws && x.user_id === member && x.status === 'active');
+  return m && ['admin', 'editor'].includes(m.role) && profile(member)?.status === 'active';
+};
+const shareOut = (s) => {
+  const p = profile(s.sender_id) || {};
+  return { ...clone(s), sender_name: p.full_name || p.username || 'A member' };
+};
+export async function shareContact(contact, recipientId) {
+  await sleep(200);
+  const c = db.contacts.find((x) => x.id === contact.id);
+  if (!c || !visible(c)) deny();
+  if (recipientId === uid() || !canReceive(c.workspace_id, recipientId)) deny('You can only share with editors and admins of this workspace.');
+  if (db.shares.some((s) => s.contact_id === c.id && s.recipient_id === recipientId && s.status === 'pending')) {
+    throw new Error('This card is already waiting for their answer.');
+  }
+  const s = {
+    id: newId('s'), workspace_id: c.workspace_id, contact_id: c.id, sender_id: uid(), recipient_id: recipientId,
+    status: 'pending', contact_name: c.full_name || '', contact_title: c.job_title || null, contact_company: c.company || null,
+    new_contact_id: null, created_at: now(), responded_at: null,
+  };
+  db.shares.push(s);
+  return shareOut(s);
+}
+export async function listContactShares(contactId) {
+  await tick();
+  return db.shares.filter((s) => s.contact_id === contactId && [s.sender_id, s.recipient_id].includes(uid()))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at)).map(shareOut);
+}
+export async function listIncomingShares(me) {
+  await tick();
+  return db.shares.filter((s) => s.recipient_id === me && s.status === 'pending' && roleIn(s.workspace_id)).map(shareOut);
+}
+export async function acceptShare(share) {
+  await sleep(300);
+  const s = db.shares.find((x) => x.id === share.id);
+  if (!s || s.recipient_id !== uid()) deny('Share not found.');
+  if (s.status !== 'pending') throw new Error('This share was already answered.');
+  if (!canReceive(s.workspace_id, uid())) deny('You need editor access to this workspace to accept cards.');
+  const c = db.contacts.find((x) => x.id === s.contact_id);
+  if (!c) throw new Error('The card is no longer available.');
+  const keep = ['full_name', 'job_title', 'company', 'department', 'emails', 'phones', 'website', 'address', 'city', 'region',
+    'country', 'card_text', 'contact_type', 'industry', 'business_category', 'job_function', 'seniority', 'opportunities', 'tags',
+    'front_path', 'back_path'];
+  const copy = { id: newId('c'), workspace_id: c.workspace_id, created_by: uid(), is_private: true, created_at: now(), updated_at: now() };
+  for (const k of keep) copy[k] = clone(c[k] ?? null);
+  db.contacts.push(copy);
+  Object.assign(s, { status: 'accepted', new_contact_id: copy.id, responded_at: now() });
+  return clone(copy);
+}
+export async function closeShare(shareId) {
+  await tick();
+  const s = db.shares.find((x) => x.id === shareId);
+  if (!s || ![s.sender_id, s.recipient_id].includes(uid())) deny('Share not found.');
+  if (s.status !== 'pending') throw new Error('This share was already answered.');
+  s.status = s.recipient_id === uid() ? 'declined' : 'cancelled';
+  s.responded_at = now();
+  return s.status;
 }
 
 let audioUrl = null;

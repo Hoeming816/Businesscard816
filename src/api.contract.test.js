@@ -10,7 +10,7 @@ describe('demo api', () => {
   it('seeds about 40 contacts the demo user can see', async () => {
     const list = await demo.listContacts('w-north');
     expect(list.length).toBeGreaterThanOrEqual(38);
-    expect(list.every((c) => !c.is_private || c.created_by === 'u-alex')).toBe(true);
+    expect(list.every((c) => c.created_by === 'u-alex')).toBe(true);
   });
   it('bumps last contacted on a non-Note entry', async () => {
     const [c] = await demo.listContacts('w-north');

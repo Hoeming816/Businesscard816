@@ -1,6 +1,6 @@
 # Nomiqo by Aspencom
 
-Scan, file and follow up on business cards. Photograph the front and back of a card, let Claude read it, review the details, and file the contact in a shared team database, or keep it private. Every contact keeps a timeline of meetings, calls and recorded conversations, with AI summaries.
+Scan, file and follow up on business cards. Photograph the front and back of a card, let Claude read it, review the details, and file the contact. Each card is visible only to the member who saved it, who can share a copy with a teammate. Every contact keeps a timeline of meetings, calls and recorded conversations, with AI summaries.
 
 - **Web app:** React 18 + Vite, mobile-first (`src/`)
 - **Backend:** Supabase Auth, Postgres with row level security, private Storage and Edge Functions (`supabase/`)
@@ -26,7 +26,7 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-You can also paste `supabase/migrations/0001_cardfile.sql` into the SQL editor and run it. The migration creates the tables, security rules, triggers, RPCs and the two private storage buckets (`cards`, `recordings`).
+You can also paste each file in `supabase/migrations/` into the SQL editor and run them in order. The migration creates the tables, security rules, triggers, RPCs and the two private storage buckets (`cards`, `recordings`).
 
 ### 3. Deploy the edge functions
 
@@ -106,8 +106,8 @@ Every push to `main` then deploys. Netlify and Cloudflare Pages work the same wa
 ## How access works
 
 - Every new account gets its own workspace and is its admin. Admins add people by username as **admin**, **editor** or **viewer**.
-- **Private cards** are visible only to their owner, and that includes admins and super admins. A card's photos, notes and recordings follow its privacy.
-- When an admin takes someone else's shared card private, the admin becomes its owner.
+- **Every card is visible only to the member who saved it**, and that includes workspace admins and super admins. A card's photos, notes and recordings follow it. Cards never change owner.
+- **Sharing:** a member can offer a card to an editor or admin of the same workspace. The recipient is asked to accept; accepting gives them their own private copy with the photos, without the sender's notes or pipeline.
 - **Super admins** can cancel or reinstate any account, suspend workspaces, revoke memberships and reset passwords. They cannot read cards: their dashboard only receives counts.
 - All of this is enforced in Postgres (RLS and guard triggers), not just in the UI. `supabase/tests/rls_test.sql` checks it.
 

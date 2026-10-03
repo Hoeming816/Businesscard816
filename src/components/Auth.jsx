@@ -2,13 +2,18 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../context.js';
 import lockupUrl from '../assets/nomiqo-lockup.png';
 import { Icon, Logo } from './ui.jsx';
+import { load, save } from '../storage.js';
+
+// Last username used on this device, to prefill sign-in. The password is never stored.
+const LAST_USER_KEY = 'nomiqo.lastUsername';
 
 export const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
 
 export default function AuthScreen({ onSuspended }) {
   const { api } = useApp();
   const [mode, setMode] = useState('signin');
-  const [username, setUsername] = useState('');
+  const [remembered] = useState(() => load(LAST_USER_KEY, '') || '');
+  const [username, setUsername] = useState(remembered);
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,6 +57,7 @@ export default function AuthScreen({ onSuspended }) {
       } else {
         await api.signIn(uname, password);
       }
+      save(LAST_USER_KEY, uname);
     } catch (err) {
       if (err.suspended) onSuspended(err.reason);
       else setError(err.message || 'Something went wrong.');
@@ -60,7 +66,11 @@ export default function AuthScreen({ onSuspended }) {
     }
   };
 
-  const switchMode = (m) => { setMode(m); setError(''); };
+  const switchMode = (m) => {
+    setMode(m);
+    setError('');
+    setUsername(m === 'signin' ? remembered : '');
+  };
 
   return (
     <div className="auth">
@@ -123,6 +133,7 @@ export default function AuthScreen({ onSuspended }) {
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoFocus={mode === 'signin' && !!remembered}
               minLength={mode === 'signup' ? 8 : undefined}
               required
             />
