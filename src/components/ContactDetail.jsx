@@ -5,6 +5,7 @@ import { followUpState, todayISO } from '../filters.js';
 import { canEditContact, canDeleteContact, canToggleVisibility, canTakePrivate, canAddInteraction } from '../perms.js';
 import ContactForm from './ContactForm.jsx';
 import Timeline from './Timeline.jsx';
+import SharePanel from './SharePanel.jsx';
 import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, formatDate, initials } from './ui.jsx';
 
 export default function ContactDetail({ contact, onClose }) {
@@ -15,6 +16,7 @@ export default function ContactDetail({ contact, onClose }) {
   const [draft, setDraft] = useState(base);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const editable = canEditContact(contact, role, uid);
   // Only the fields the user changed, so updates made elsewhere (e.g. "Log
@@ -197,6 +199,11 @@ export default function ContactDetail({ contact, onClose }) {
                   <Icon name="check" size={16} /> {contact.last_contacted_on === today ? 'Contacted today' : 'Log contact today'}
                 </button>
               )}
+              {role && (
+                <button type="button" className={`btn btn-outline ${sharing ? 'has-active' : ''}`} aria-expanded={sharing} onClick={() => setSharing((v) => !v)}>
+                  <Icon name="send" size={16} /> Share
+                </button>
+              )}
               {canToggleVisibility(contact, role, uid) && (
                 <button type="button" className="btn btn-outline" disabled={busy}
                   onClick={() => patch({ is_private: !contact.is_private }, contact.is_private ? 'Card shared with the workspace' : 'Card is now private')}>
@@ -220,6 +227,7 @@ export default function ContactDetail({ contact, onClose }) {
                 </ConfirmButton>
               )}
             </div>
+            {sharing && <SharePanel contact={contact} onClose={() => setSharing(false)} />}
           </div>
         </div>
 
