@@ -388,6 +388,12 @@ export async function uploadRecording(ws, contactId, interactionId, blob, ext) {
   db.blobs.set(path, URL.createObjectURL(blob));
   return path;
 }
+export async function downloadRecording(path) {
+  await tick();
+  const url = urlFor(path);
+  if (!url) throw new Error('Could not load the recording');
+  return (await fetch(url)).blob();
+}
 export async function transcribe() {
   await sleep(1500);
   return 'Thanks for making the time today. We are planning to refresh the network across our two Singapore sites next year. '
@@ -404,6 +410,7 @@ export async function summarise({ contact, today, notes, transcript }) {
     summary: `${contact?.full_name || 'The contact'} (${contact?.company || 'their company'}) covered the points in your notes: "${gist}". `
       + 'They are open to a site survey followed by a written proposal, and the next step is to confirm scope, timeline and the budget owner. '
       + '(Demo summary: the live app writes this with Claude.)',
+    key_points: ['Network refresh planned across two Singapore sites next year', 'Ageing core switches and patchy Wi-Fi on the operations floor', 'Proposal wanted by the end of the month, site survey first'],
     action_items: ['Book a site survey for next week', 'Send a scoped proposal with pricing', 'Confirm decision timeline and budget owner'],
     follow_up_on: addDays(t, 7),
     lead_status: next[contact?.lead_status] || 'Qualified',
