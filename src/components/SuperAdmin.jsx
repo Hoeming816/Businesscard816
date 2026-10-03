@@ -71,7 +71,7 @@ function Stat({ label, value }) {
 function Accounts({ profiles, reload, toast }) {
   const { api, uid, setProfile } = useApp();
   const [q, setQ] = useState('');
-  const [action, setAction] = useState(null); // { id, kind: 'suspend' | 'reset' }
+  const [action, setAction] = useState(null); // { id, kind: 'suspend' | 'reset' | 'features' | 'delete' }
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -84,7 +84,7 @@ function Accounts({ profiles, reload, toast }) {
     setBusy(true);
     try {
       await api.adminUserAction(kind, p.id, extra);
-      toast(kind === 'suspend' ? `Access cancelled for @${p.username}` : kind === 'reinstate' ? `@${p.username} reinstated` : `Password reset for @${p.username}`);
+      toast({ suspend: `Access cancelled for @${p.username}`, reinstate: `@${p.username} reinstated`, delete: `@${p.username} deleted` }[kind] || `Password reset for @${p.username}`);
       setAction(null);
       setInput('');
       await reload();
@@ -110,6 +110,7 @@ function Accounts({ profiles, reload, toast }) {
             {list.map((p) => {
               const self = p.id === uid;
               const open = action && action.id === p.id;
+              const confirmed = input.trim().toLowerCase() === p.username;
               return (
                 <Fragment key={p.id}>
                   <tr className={p.status === 'suspended' ? 'is-inactive' : ''}>
@@ -142,6 +143,11 @@ function Accounts({ profiles, reload, toast }) {
                         onClick={() => { setAction({ id: p.id, kind: 'reset' }); setInput(''); }}>
                         Reset password
                       </button>
+                      <button type="button" className="btn btn-danger-ghost btn-sm" disabled={self || busy}
+                        title={self ? 'You cannot delete your own account' : undefined}
+                        onClick={() => { setAction({ id: p.id, kind: 'delete' }); setInput(''); }}>
+                        <Icon name="trash" size={14} /> Delete account
+                      </button>
                     </td>
                   </tr>
                   {open && action.kind === 'features' && (
@@ -165,23 +171,33 @@ function Accounts({ profiles, reload, toast }) {
                           onSubmit={(e) => {
                             e.preventDefault();
                             if (action.kind === 'suspend') run('suspend', p, { reason: input.trim() || undefined });
+                            else if (action.kind === 'delete') { if (confirmed) run('delete', p, { confirm_username: input.trim() }); }
                             else if (input.length >= 8) run('reset_password', p, { password: input });
                           }}
                         >
                           <div className="field grow">
                             <label htmlFor={`act-${p.id}`}>
-                              {action.kind === 'suspend' ? `Reason shown to @${p.username}` : `New password for @${p.username} (8+ characters)`}
+                              {action.kind === 'suspend' ? `Reason shown to @${p.username}`
+                                : action.kind === 'delete' ? `Type ${p.username} to delete this account`
+                                  : `New password for @${p.username} (8+ characters)`}
                             </label>
                             <input id={`act-${p.id}`} autoFocus type={action.kind === 'reset' ? 'text' : 'text'} autoComplete="off"
                               className={action.kind === 'reset' ? 'mono' : undefined}
                               value={input} onChange={(e) => setInput(e.target.value)} />
                           </div>
-                          <button type="submit" className={`btn ${action.kind === 'suspend' ? 'btn-danger' : 'btn-primary'}`} disabled={busy || (action.kind === 'reset' && input.length < 8)}>
-                            {action.kind === 'suspend' ? 'Cancel access' : 'Set password'}
+                          <button type="submit" className={`btn ${action.kind === 'reset' ? 'btn-primary' : 'btn-danger'}`}
+                            disabled={busy || (action.kind === 'reset' && input.length < 8) || (action.kind === 'delete' && !confirmed)}>
+                            {{ suspend: 'Cancel access', delete: 'Delete for good' }[action.kind] || 'Set password'}
                           </button>
                           <button type="button" className="btn btn-ghost" onClick={() => setAction(null)}>Back</button>
                         </form>
                         {action.kind === 'suspend' && <p className="help">They are signed out everywhere and lose access to every workspace until reinstated.</p>}
+                        {action.kind === 'delete' && (
+                          <p className="help danger-help">
+                            This can't be undone. Their login, cards, card photos, notes, recordings and share offers are deleted.
+                            Team workspaces they own that other members still use pass to you. To keep their data, use Cancel access instead.
+                          </p>
+                        )}
                       </td>
                     </tr>
                   )}
