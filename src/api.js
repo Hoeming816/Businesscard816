@@ -1,0 +1,411 @@
+// All data access for the app. The demo build swaps this module for
+// src/demo/api.js (see vite.config.js), which implements the same exports
+// in memory. Every function either returns data or throws an Error with a
+// user-presentable message.
+
+import { supabase, USERNAME_DOMAIN, configured } from './supabase.js';
+
+export const isDemo = false;
+export const isConfigured = configured;
+
+const PAGE = 1000;
+const SIGN_TTL = 3600;
+
+const MEMBER_SELECT =
+  'workspace_id, user_id, role, status, created_at, profile:profiles!workspace_members_user_id_fkey(username, full_name, status)';
+
+function fail(error, fallback = 'Something went wrong') {
+  if (!error) return;
+  const err = new Error(error.message || fallback);
+  err.code = error.code;
+  throw err;
+}
+
+function flattenMember(m) {
+  return {
+    workspace_id: m.workspace_id,
+    user_id: m.user_id,
+    role: m.role,
+    status: m.status,
+    created_at: m.created_at,
+    username: m.profile?.username || '',
+    full_name: m.profile?.full_name || '',
+    profile_status: m.profile?.status || 'active',
+  };
+}
+
+async function invoke(name, body) {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) {
+    let msg = error.message || `The ${name} service failed`;
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === 'function') {
+        const j = await ctx.json();
+        if (j && j.error) msg = j.error;
+      }
+    } catch { /* body was not JSON */ }
+    throw new Error(msg);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export const usernameToEmail = (username) => `${username.trim().toLowerCase()}@${USERNAME_DOMAIN}`;
+
+/** Current session user ({ id }) or null. */
+export async function getSessionUser() {
+  const { data } = await supabase.auth.getSession();
+  return data.session ? { id: data.session.user.id } : null;
+}
+
+/** Subscribe to sign-in / sign-out. Returns an unsubscribe function. */
+export function onAuthChange(cb) {
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    cb(session ? { id: session.user.id } : null);
+  });
+  return () => data.subscription.unsubscribe();
+}
+
+/**
+ * Sign in with username + password. A banned (suspended) account throws an
+ * Error with `suspended = true` and `reason` from suspension_notice().
+ */
+export async function signIn(username, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(username),
+    password,
+  });
+  if (error) {
+    const text = `${error.message || ''} ${error.code || ''}`;
+    if (/banned/i.test(text)) {
+      const { data: reason } = await supabase.rpc('suspension_notice', { p_username: username.trim().toLowerCase() });
+      const err = new Error('Access suspended');
+      err.suspended = true;
+      err.reason = reason || '';
+      throw err;
+    }
+    if (/invalid login credentials/i.test(error.message)) throw new Error('Wrong username or password.');
+    fail(error);
+  }
+  return { id: data.user.id };
+}
+
+export async function signUp({ username, password, full_name }) {
+  const { data, error } = await supabase.auth.signUp({
+    email: usernameToEmail(username),
+    password,
+    options: { data: { username: username.trim().toLowerCase(), full_name: full_name.trim() } },
+  });
+  fail(error);
+  if (!data.session) {
+    // Email confirmation must be off for username sign-in; try signing in directly.
+    return signIn(username, password);
+  }
+  return { id: data.user.id };
+}
+
+export async function usernameAvailable(username) {
+  const { data, error } = await supabase.rpc('username_available', { p_username: username });
+  fail(error);
+  return !!data;
+}
+
+export async function signOut() {
+  await supabase.auth.signOut();
+}
+
+// ---------------------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------------------
+
+export async function getProfile(uid) {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+  fail(error);
+  return data;
+}
+
+export async function updateFullName(uid, full_name) {
+  const { data, error } = await supabase.from('profiles').update({ full_name }).eq('id', uid).select().single();
+  fail(error);
+  return data;
+}
+
+export async function updatePassword(password) {
+  const { error } = await supabase.auth.updateUser({ password });
+  fail(error);
+}
+
+// ---------------------------------------------------------------------------
+// Workspaces & members
+// ---------------------------------------------------------------------------
+
+/** Active memberships: [{ id, name, owner_id, status, role }]. */
+export async function listMyWorkspaces(uid) {
+  const { data, error } = await supabase
+    .from('workspace_members')
+    .select('role, status, workspace:workspaces(id, name, owner_id, status, created_at)')
+    .eq('user_id', uid)
+    .eq('status', 'active');
+  fail(error);
+  return (data || [])
+    .filter((m) => m.workspace && m.workspace.status === 'active')
+    .map((m) => ({ ...m.workspace, role: m.role }))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+export async function createWorkspace(uid, name) {
+  const { data, error } = await supabase.from('workspaces').insert({ name: name.trim(), owner_id: uid }).select().single();
+  fail(error);
+  return { ...data, role: 'admin' };
+}
+
+export async function renameWorkspace(id, name) {
+  const { data, error } = await supabase.from('workspaces').update({ name: name.trim() }).eq('id', id).select().single();
+  fail(error);
+  return data;
+}
+
+export async function listMembers(workspaceId) {
+  const { data, error } = await supabase.from('workspace_members').select(MEMBER_SELECT).eq('workspace_id', workspaceId);
+  fail(error);
+  return (data || []).map(flattenMember);
+}
+
+export async function addMember(workspaceId, username, role) {
+  const { error } = await supabase.rpc('add_member', { p_workspace: workspaceId, p_username: username.trim().toLowerCase(), p_role: role });
+  fail(error);
+}
+
+/** patch: { role } and/or { status: 'active' | 'revoked' } */
+export async function updateMember(workspaceId, userId, patch) {
+  const { error } = await supabase.from('workspace_members').update(patch).eq('workspace_id', workspaceId).eq('user_id', userId);
+  fail(error);
+}
+
+export async function removeMember(workspaceId, userId) {
+  const { error } = await supabase.from('workspace_members').delete().eq('workspace_id', workspaceId).eq('user_id', userId);
+  fail(error);
+}
+
+// ---------------------------------------------------------------------------
+// Contacts
+// ---------------------------------------------------------------------------
+
+/** Every readable contact in the workspace, loaded in pages of 1000. */
+export async function listContacts(workspaceId) {
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, from + PAGE - 1);
+    fail(error);
+    out.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
+export async function getContact(id) {
+  const { data, error } = await supabase.from('contacts').select('*').eq('id', id).maybeSingle();
+  fail(error);
+  return data;
+}
+
+export async function insertContact(row) {
+  const { data, error } = await supabase.from('contacts').insert(row).select().single();
+  fail(error);
+  return data;
+}
+
+export async function updateContact(id, patch) {
+  const { data, error } = await supabase.from('contacts').update(patch).eq('id', id).select().maybeSingle();
+  fail(error);
+  return data; // null when the caller can no longer read it (e.g. taken private by an admin)
+}
+
+async function listFolder(bucket, prefix) {
+  const { data } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+  return (data || []).filter((o) => o.id).map((o) => `${prefix}/${o.name}`);
+}
+
+/** Removes photos and recordings first (storage RLS needs the row), then the row. */
+export async function deleteContact(contact) {
+  const prefix = `${contact.workspace_id}/${contact.id}`;
+  const cardPaths = new Set([contact.front_path, contact.back_path].filter(Boolean));
+  for (const p of await listFolder('cards', prefix)) cardPaths.add(p);
+
+  const { data: ints } = await supabase.from('interactions').select('audio_path').eq('contact_id', contact.id);
+  const recPaths = new Set((ints || []).map((i) => i.audio_path).filter(Boolean));
+  for (const p of await listFolder('recordings', prefix)) recPaths.add(p);
+
+  if (cardPaths.size) {
+    const { error } = await supabase.storage.from('cards').remove([...cardPaths]);
+    fail(error, 'Could not delete the card photos');
+  }
+  if (recPaths.size) {
+    const { error } = await supabase.storage.from('recordings').remove([...recPaths]);
+    fail(error, 'Could not delete the recordings');
+  }
+  const { error } = await supabase.from('contacts').delete().eq('id', contact.id);
+  fail(error);
+}
+
+/** Upload a card photo; returns the storage path. side: 'front' | 'back'. */
+export async function uploadCardPhoto(workspaceId, contactId, side, blob) {
+  const path = `${workspaceId}/${contactId}/${side}-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from('cards').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+  fail(error, 'Photo upload failed');
+  return path;
+}
+
+export async function removeStorageObjects(bucket, paths) {
+  const list = paths.filter(Boolean);
+  if (!list.length) return;
+  const { error } = await supabase.storage.from(bucket).remove(list);
+  fail(error);
+}
+
+/** Batch-sign storage paths. Returns { [path]: url }. */
+export async function signUrls(bucket, paths) {
+  const list = [...new Set(paths.filter(Boolean))];
+  if (!list.length) return {};
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrls(list, SIGN_TTL);
+  fail(error);
+  const out = {};
+  for (const r of data || []) if (r.signedUrl && !r.error) out[r.path] = r.signedUrl;
+  return out;
+}
+
+export async function signUrl(bucket, path) {
+  if (!path) return null;
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, SIGN_TTL);
+  fail(error);
+  return data.signedUrl;
+}
+
+/** AI card reading. front/back: base64 JPEG without the data: prefix. */
+export async function scanCard(front, back) {
+  const data = await invoke('scan-card', { front, back: back || null, media_type: 'image/jpeg' });
+  if (!data || !data.card) throw new Error('The card reader returned no result.');
+  return data.card;
+}
+
+// ---------------------------------------------------------------------------
+// Interactions (notes & meetings)
+// ---------------------------------------------------------------------------
+
+export async function listInteractions(contactId) {
+  const { data, error } = await supabase
+    .from('interactions')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('occurred_on', { ascending: false })
+    .order('created_at', { ascending: false });
+  fail(error);
+  return data || [];
+}
+
+export async function insertInteraction(row) {
+  const { data, error } = await supabase.from('interactions').insert(row).select().single();
+  fail(error);
+  return data;
+}
+
+export async function updateInteraction(id, patch) {
+  const { data, error } = await supabase.from('interactions').update(patch).eq('id', id).select().single();
+  fail(error);
+  return data;
+}
+
+export async function deleteInteraction(interaction) {
+  if (interaction.audio_path) {
+    const { error } = await supabase.storage.from('recordings').remove([interaction.audio_path]);
+    fail(error, 'Could not delete the recording');
+  }
+  const { error } = await supabase.from('interactions').delete().eq('id', interaction.id);
+  fail(error);
+}
+
+export async function uploadRecording(workspaceId, contactId, interactionId, blob, ext) {
+  const path = `${workspaceId}/${contactId}/${interactionId}.${ext}`;
+  const { error } = await supabase.storage.from('recordings').upload(path, blob, {
+    contentType: blob.type || (ext === 'mp4' ? 'audio/mp4' : 'audio/webm'),
+    upsert: true,
+  });
+  fail(error, 'Recording upload failed');
+  return path;
+}
+
+/** Server-side transcription. Throws with code 'not_configured' if Whisper is off. */
+export async function transcribe(blob, language, ext) {
+  const form = new FormData();
+  form.append('action', 'transcribe');
+  form.append('language', (language || 'en').slice(0, 2));
+  form.append('audio', blob, `rec.${ext}`);
+  try {
+    const data = await invoke('meeting-notes', form);
+    return data.transcript || '';
+  } catch (e) {
+    if (/not configured|not set up|openai_api_key|not enabled/i.test(e.message)) e.code = 'not_configured';
+    throw e;
+  }
+}
+
+/** Returns { summary, action_items, follow_up_on, lead_status }. */
+export async function summarise(payload) {
+  const data = await invoke('meeting-notes', { action: 'summarise', ...payload });
+  return {
+    summary: data.summary || '',
+    action_items: Array.isArray(data.action_items) ? data.action_items : [],
+    follow_up_on: data.follow_up_on || null,
+    lead_status: data.lead_status || null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Super admin
+// ---------------------------------------------------------------------------
+
+export async function adminListProfiles() {
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, status, suspended_reason, is_super_admin, created_at')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+    fail(error);
+    out.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
+/** action: 'suspend' | 'reinstate' | 'reset_password'; extra: { reason?, password? } */
+export async function adminUserAction(action, userId, extra = {}) {
+  await invoke('admin-users', { action, user_id: userId, ...extra });
+}
+
+export async function adminListWorkspaces() {
+  const { data, error } = await supabase.rpc('super_admin_workspaces');
+  fail(error);
+  return data || [];
+}
+
+export async function adminSetWorkspaceStatus(id, status) {
+  const { error } = await supabase.from('workspaces').update({ status }).eq('id', id);
+  fail(error);
+}
+
+export async function adminWorkspaceMembers(workspaceId) {
+  return listMembers(workspaceId);
+}

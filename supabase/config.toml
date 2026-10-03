@@ -1,0 +1,20 @@
+# Minimal Supabase CLI config for Cardfile. Run `supabase link --project-ref <ref>`
+# to point it at your hosted project.
+project_id = "cardfile"
+
+[auth]
+# Usernames are mapped to <username>@<VITE_USERNAME_DOMAIN>; no email is ever sent.
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[functions.scan-card]
+verify_jwt = true
+
+[functions.meeting-notes]
+verify_jwt = true
+
+[functions.admin-users]
+verify_jwt = true
