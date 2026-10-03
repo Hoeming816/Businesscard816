@@ -32,12 +32,22 @@ You can also paste `supabase/migrations/0001_cardfile.sql` into the SQL editor a
 
 ```bash
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+# or, to pay through Vercel instead of an Anthropic account:
+# supabase secrets set AI_GATEWAY_API_KEY=...             # see "Using Vercel AI Gateway" below
 # optional:
 supabase secrets set ANTHROPIC_MODEL=claude-sonnet-5-5     # this is the default
 supabase secrets set OPENAI_API_KEY=sk-...                 # enables "Transcribe recording"
 
 supabase functions deploy scan-card meeting-notes admin-users
 ```
+
+#### Using Vercel AI Gateway instead of an Anthropic key
+
+1. In Vercel, open your team's **AI Gateway** tab → **API Keys** → **Create key**.
+2. In Supabase, open **Edge Functions → Secrets**, add `AI_GATEWAY_API_KEY` with that key, and save.
+3. Redeploy `scan-card` and `meeting-notes`, or wait for the next deploy. Secrets apply on the next cold start.
+
+When `AI_GATEWAY_API_KEY` is set, it is used instead of `ANTHROPIC_API_KEY`, and Claude is called through the gateway. The model is `anthropic/claude-sonnet-5.5` by default, derived from `ANTHROPIC_MODEL`. Override it with `AI_GATEWAY_MODEL` if the gateway lists it under a different name.
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are provided to the functions automatically. API keys stay in function secrets and never reach the browser.
 
@@ -79,7 +89,7 @@ Every push to `main` then deploys. Netlify and Cloudflare Pages work the same wa
 |---|---|
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | `.env` / hosting env vars |
 | `VITE_USERNAME_DOMAIN` (default `users.cardfile.app`) | `.env` / hosting env vars. Don't change it once people have signed up, because their logins are tied to it. |
-| `ANTHROPIC_API_KEY` (required), `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`) | Edge function secrets |
+| `ANTHROPIC_API_KEY` or `AI_GATEWAY_API_KEY` (one is required), `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`), `AI_GATEWAY_MODEL` (optional) | Edge function secrets |
 | `OPENAI_API_KEY` (optional) | Edge function secret |
 | Filter value lists | `src/taxonomy.js`. Run `npm run sync:taxonomy` and redeploy `scan-card` after editing. `npm run build` syncs automatically. |
 
