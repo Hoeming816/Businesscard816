@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context.js';
-import { Icon, Avatar, Pill } from './ui.jsx';
+import { Icon, Avatar, Pill, SaveLabel, useJustSaved } from './ui.jsx';
 
 export default function Me() {
   const { api, profile, setProfile, workspaces, workspace, switchWorkspace, reloadWorkspaces, toast, setView } = useApp();
@@ -10,6 +10,8 @@ export default function Me() {
   const [pw2, setPw2] = useState('');
   const [pwError, setPwError] = useState('');
   const [savingPw, setSavingPw] = useState(false);
+  const [nameSaved, markNameSaved] = useJustSaved();
+  const [pwSaved, markPwSaved] = useJustSaved();
   const [wsName, setWsName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -19,7 +21,7 @@ export default function Me() {
     setSavingName(true);
     try {
       setProfile(await api.updateFullName(profile.id, name.trim()));
-      toast('Saved');
+      markNameSaved();
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -37,7 +39,8 @@ export default function Me() {
       await api.updatePassword(pw);
       setPw('');
       setPw2('');
-      toast('Saved. Your password is changed.');
+      markPwSaved();
+      toast('Your password is changed.');
     } catch (err) {
       setPwError(err.message);
     } finally {
@@ -83,7 +86,7 @@ export default function Me() {
             <input id="me-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <button type="submit" className="btn btn-primary" disabled={savingName || !name.trim() || name.trim() === profile.full_name}>
-            {savingName ? 'Saving…' : 'Save'}
+            <SaveLabel saving={savingName} saved={nameSaved}>Save</SaveLabel>
           </button>
         </div>
         <p className="help">Your username can't be changed.</p>
@@ -103,7 +106,7 @@ export default function Me() {
           </div>
         </div>
         {pwError && <p className="form-error" role="alert">{pwError}</p>}
-        <button type="submit" className="btn btn-primary" disabled={savingPw || !pw}>{savingPw ? 'Saving…' : 'Change password'}</button>
+        <button type="submit" className="btn btn-primary" disabled={savingPw || !pw}><SaveLabel saving={savingPw} saved={pwSaved}>Change password</SaveLabel></button>
       </form>
 
       <section className="panel" aria-labelledby="me-ws">

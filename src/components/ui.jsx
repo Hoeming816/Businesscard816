@@ -84,6 +84,26 @@ export function Logo({ compact = false, byline = false, tagline = false }) {
   );
 }
 
+/** After a save: true for a moment so the button can say "Saved". */
+export function useJustSaved(ms = 1500) {
+  const [on, setOn] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const mark = () => {
+    clearTimeout(timer.current);
+    setOn(true);
+    timer.current = setTimeout(() => setOn(false), ms);
+  };
+  return [on, mark];
+}
+
+/** Button text for a save: "Saving…" while working, then a ticked "Saved", then the normal label. */
+export function SaveLabel({ saving, saved, children }) {
+  if (saving) return 'Saving…';
+  if (saved) return <><Icon name="check" size={16} /> Saved</>;
+  return children;
+}
+
 export function Spinner({ label = 'Loading' }) {
   return <span className="spinner" role="status" aria-label={label} />;
 }
