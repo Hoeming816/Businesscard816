@@ -318,6 +318,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 
 .logo { display: inline-flex; align-items: center; gap: 9px; }
 .logo-text { display: inline-flex; flex-direction: column; line-height: 1.1; }
+.logo-flow { color: var(--accent); }
 .logo-by { font-size: 12px; font-weight: 500; color: var(--ink-3); letter-spacing: .01em; }
 .logo-word { font-family: var(--font-head); font-weight: 700; font-size: 20px; letter-spacing: -.02em; color: var(--ink); }
 

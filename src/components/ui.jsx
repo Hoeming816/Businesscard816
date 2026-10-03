@@ -69,15 +69,18 @@ export function Icon({ name, size = 18, className = '', strokeWidth = 1.8, title
 export function Logo({ compact = false, byline = false }) {
   return (
     <span className="logo">
-      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="5" y="5" width="22" height="15" rx="2.5" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5" transform="rotate(-8 16 12)" />
-        <rect x="3" y="10" width="26" height="17" rx="3" fill="var(--accent)" />
-        <rect x="7" y="15" width="10" height="2.6" rx="1.1" fill="var(--accent-ink)" />
-        <rect x="7" y="20" width="15" height="2" rx="1" fill="var(--accent-ink)" opacity=".7" />
+      <svg className="logo-mark" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="15" fill="#2b55e0" />
+        <rect x="20" y="10" width="33" height="21" rx="4" fill="#fff" opacity=".3" transform="rotate(-9 36.5 20.5)" />
+        <rect x="9" y="19" width="38" height="25" rx="4.5" fill="#fff" />
+        <rect x="15" y="26" width="13" height="3.6" rx="1.8" fill="#2b55e0" />
+        <rect x="15" y="33.4" width="20" height="2.8" rx="1.4" fill="#2b55e0" opacity=".42" />
+        <path d="M14 52.5 C 32 56.5, 48 52, 53.5 37" fill="none" stroke="#a9bdff" strokeWidth="4" strokeLinecap="round" />
+        <path d="M48.6 39.6 L 53.8 35.6 L 57.4 41.2" fill="none" stroke="#a9bdff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       {!compact && (
         <span className="logo-text">
-          <span className="logo-word">CardFlow</span>
+          <span className="logo-word">Card<span className="logo-flow">Flow</span></span>
           {byline && <span className="logo-by">by Aspencom</span>}
         </span>
       )}
