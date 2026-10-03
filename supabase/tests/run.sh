@@ -7,5 +7,5 @@ DB=cardfile_test_$$
 createdb "$DB"
 trap 'dropdb "$DB"' EXIT
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f stubs.sql
-psql -q -v ON_ERROR_STOP=1 -d "$DB" -f ../migrations/0001_cardfile.sql
+for f in ../migrations/*.sql; do psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$f"; done
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f rls_test.sql

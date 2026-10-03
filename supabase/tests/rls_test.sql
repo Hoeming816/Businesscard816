@@ -171,5 +171,7 @@ reset role;
 set role anon;
 select pg_temp.ok(public.username_available('newperson') and not public.username_available('alice') and not public.username_available('No!'), 'username availability check');
 select pg_temp.fails($$select count(*) from public.contacts$$, 'anon cannot read contacts');
+select pg_temp.fails($$select public.ws_role('$$ || :'ws' || $$')$$, 'anon cannot call helper predicates');
+select pg_temp.fails($$select public.super_admin_workspaces()$$, 'anon cannot call dashboard RPC');
 reset role;
 \echo 'ALL RLS TESTS PASSED'
