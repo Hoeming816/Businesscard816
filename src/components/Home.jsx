@@ -2,6 +2,13 @@ import { useState } from 'react';
 import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
 import { Tabs } from './ui.jsx';
+import cardsIcon from '../assets/tab-business-cards.png';
+
+// Tab icons: an image (img) or, until one is supplied, a built-in icon name.
+const TAB_ICONS = {
+  cards: { img: cardsIcon },
+  minutes: { icon: 'history' }, // placeholder until the Meeting Minutes icon arrives
+};
 
 const TAB_KEY = 'nomiqo.homeTab';
 const readTab = () => { try { return sessionStorage.getItem(TAB_KEY) || 'cards'; } catch { return 'cards'; } };
@@ -21,8 +28,8 @@ export default function Home() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: 'cards', label: 'Business Cards Record' },
-          { value: 'minutes', label: 'Meeting Minutes' },
+          { value: 'cards', label: 'Business Cards Record', ...TAB_ICONS.cards },
+          { value: 'minutes', label: 'Meeting Minutes', ...TAB_ICONS.minutes },
         ]}
       />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>

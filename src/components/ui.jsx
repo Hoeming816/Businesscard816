@@ -245,7 +245,7 @@ export function Tabs({ tabs, value, onChange, label, className = '' }) {
           onClick={() => onChange(t.value)}
           onKeyDown={(e) => onKey(e, i)}
         >
-          {t.icon && <Icon name={t.icon} size={16} />}
+          {t.img ? <img className="tab-img" src={t.img} alt="" /> : t.icon && <Icon name={t.icon} size={16} />}
           {t.label}
           {t.badge != null && <span className="tab-badge">{t.badge}</span>}
         </button>
