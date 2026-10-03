@@ -36,6 +36,7 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000d', 'dave@u',  '{"username":"dave","full_name":"Dave Outsider"}'),
   ('00000000-0000-0000-0000-00000000000e', 'sam@u',   '{"username":"sam","full_name":"Sam Super"}');
 update public.profiles set is_super_admin = true where username = 'sam';
+update public.profiles set features = '{"meeting": true}' where not is_super_admin; -- meeting is off by default (tested below)
 
 select pg_temp.ok((select count(*) from public.profiles) = 5, 'profiles created by trigger');
 select pg_temp.ok((select count(*) from public.workspaces) = 5, 'personal workspace per user');
@@ -230,6 +231,52 @@ select pg_temp.ok(public.close_card_share('30000000-0000-0000-0000-000000000003'
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
 select pg_temp.ok(public.close_card_share('30000000-0000-0000-0000-000000000002') = 'declined', 'recipient can decline');
 select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000003')$$, 'withdrawn offer cannot be accepted');
+
+-- ---------------------------------------------------------------- feature switches
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+update public.profiles set features = '{}' where username = 'alice';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok(public.feature_on('share') and public.feature_on('scan_ai'), 'business card features are on by default');
+select pg_temp.ok(not public.feature_on('meeting'), 'meeting is off by default');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+select pg_temp.ok(public.feature_on('meeting'), 'super admins have meeting');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('recordings', '$$ || :'ws' || $$/10000000-0000-0000-0000-000000000002/r-0.webm')$$, 'recording upload refused while meeting is off');
+select pg_temp.fails($$update public.profiles set features = '{"share": true}' where id = auth.uid()$$, 'users cannot change their own features');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+update public.profiles set features = '{"share": false}' where username = 'alice';
+select pg_temp.ok((select features ->> 'share' from public.profiles where username = 'alice') = 'false', 'super admin switches features off');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok(not public.feature_on('share') and public.feature_on('scan_ai'), 'switched-off feature reads as off, others stay on');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b')$$, 'share refused when switched off');
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('recordings', '$$ || :'ws' || $$/10000000-0000-0000-0000-000000000002/r-1.webm')$$, 'recording upload still refused');
+insert into storage.objects (bucket_id, name) values ('cards', :'ws' || '/10000000-0000-0000-0000-000000000002/front-2.jpg');
+select pg_temp.ok(true, 'card photos still upload with recording off');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+update public.profiles set features = '{"meeting": true}' where username = 'alice';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into storage.objects (bucket_id, name) values ('recordings', :'ws' || '/10000000-0000-0000-0000-000000000002/r-2.webm');
+select pg_temp.ok(true, 'recording upload works again once switched back on');
+
+-- ---------------------------------------------------------------- meetings without a card
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into public.interactions (id, workspace_id, kind, title)
+values ('40000000-0000-0000-0000-000000000001', :'ws', 'Meeting', 'Board meeting');
+select pg_temp.ok((select contact_id is null and created_by = auth.uid() from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'meeting without a card is saved as the author''s');
+insert into storage.objects (bucket_id, name) values ('recordings', :'ws' || '/m-00000000-0000-0000-0000-00000000000a/40000000-1.webm');
+select pg_temp.ok(true, 'author uploads the meeting recording to their own folder');
+update public.interactions set summary = 'ok' where id = '40000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select summary from public.interactions where id = '40000000-0000-0000-0000-000000000001') = 'ok', 'author can update their meeting');
+select pg_temp.fails($$insert into public.interactions (workspace_id, title) values ('$$ || :'ws_dave' || $$', 'x')$$, 'cannot add a meeting to a workspace you are not in');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(not exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'other members cannot see someone''s meeting');
+select pg_temp.ok(not exists (select 1 from storage.objects where name like '%/m-00000000-0000-0000-0000-00000000000a/%'), 'other members cannot see someone''s meeting recording');
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('recordings', '$$ || :'ws' || $$/m-00000000-0000-0000-0000-00000000000a/evil.webm')$$, 'cannot upload into someone else''s meeting folder');
+delete from public.interactions where id = '40000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok(exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'other members cannot delete someone''s meeting');
+delete from public.interactions where id = '40000000-0000-0000-0000-000000000001';
+select pg_temp.ok(not exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'author can delete their meeting');
 
 -- ---------------------------------------------------------------- anon
 reset role;

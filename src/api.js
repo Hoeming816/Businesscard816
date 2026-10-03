@@ -474,7 +474,7 @@ export async function adminListProfiles() {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, status, suspended_reason, is_super_admin, created_at')
+      .select('id, username, full_name, status, suspended_reason, is_super_admin, features, created_at')
       .order('created_at', { ascending: false })
       .range(from, from + PAGE - 1);
     fail(error);
@@ -487,6 +487,13 @@ export async function adminListProfiles() {
 /** action: 'suspend' | 'reinstate' | 'reset_password'; extra: { reason?, password? } */
 export async function adminUserAction(action, userId, extra = {}) {
   await invoke('admin-users', { action, user_id: userId, ...extra });
+}
+
+/** Saves a user's feature switches; only the ones that are off need listing. */
+export async function adminSetFeatures(userId, features) {
+  const { data, error } = await supabase.from('profiles').update({ features }).eq('id', userId).select('id, features').single();
+  fail(error);
+  return data;
 }
 
 export async function adminListWorkspaces() {

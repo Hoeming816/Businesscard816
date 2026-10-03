@@ -1,7 +1,7 @@
 // meeting-notes: summarises notes + transcript with Claude, and optionally
 // transcribes a recording with Whisper through the Vercel AI Gateway
 // (AI_GATEWAY_API_KEY), or OpenAI directly (OPENAI_API_KEY).
-import { HttpError, json, requireCaller, serve } from "../_shared/http.ts";
+import { HttpError, json, requireCaller, requireFeature, serve } from "../_shared/http.ts";
 import { structuredReply } from "../_shared/claude.ts";
 import { LEAD_STATUSES } from "../_shared/taxonomy.js";
 
@@ -43,7 +43,7 @@ async function summarise(body: Record<string, unknown>) {
   const header = [
     `Meeting date: ${today}`,
     `Entry type: ${body.kind ?? "Meeting"}`,
-    `Contact: ${[contact.full_name, contact.job_title, contact.company].filter(Boolean).join(", ") || "unknown"}`,
+    `Contact: ${[contact.full_name, contact.job_title, contact.company].filter(Boolean).join(", ") || "none linked (a general meeting)"}`,
     `Current lead status: ${contact.lead_status || "not set"}`,
   ].join("\n");
 
@@ -137,7 +137,7 @@ async function transcribe(form: FormData) {
 }
 
 serve(async (req) => {
-  await requireCaller(req);
+  requireFeature(await requireCaller(req), "meeting", "Meeting");
   const type = req.headers.get("content-type") ?? "";
   if (type.includes("multipart/form-data")) {
     const form = await req.formData();

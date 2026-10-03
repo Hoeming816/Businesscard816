@@ -1,41 +1,57 @@
 import { useState } from 'react';
+import { useApp } from '../context.js';
 import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
-import { Tabs } from './ui.jsx';
+import { Icon } from './ui.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
-import minutesIcon from '../assets/tab-meeting-minutes.png';
+import meetingIcon from '../assets/tab-meeting.png';
 
-// Tab icons: an image (img), or a built-in icon name (icon).
-const TAB_ICONS = {
-  cards: { img: cardsIcon },
-  minutes: { img: minutesIcon },
-};
+const SECTIONS = [
+  { value: 'cards', label: 'Business Cards', img: cardsIcon },
+  { value: 'minutes', label: 'Meeting', img: meetingIcon },
+];
 
-const TAB_KEY = 'nomiqo.homeTab';
-const readTab = () => { try { return sessionStorage.getItem(TAB_KEY) || 'cards'; } catch { return 'cards'; } };
+// Which section is open, kept for this browser tab so Scan, Team or a refresh
+// come back to it. Cleared on sign-in, so signing in starts at the selection page.
+const SECTION_KEY = 'nomiqo.homeSection';
+const readSection = () => { try { return sessionStorage.getItem(SECTION_KEY) || null; } catch { return null; } };
+export function resetHomeSection() { try { sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ } }
 
-/** The home screen: business cards and meeting minutes, one tab each. Opens on cards after sign-in. */
+/**
+ * The home screen. With Meeting on: a selection page with Business Cards and
+ * Meeting, each opening its section with a Back button to return here.
+ * Without it (the default): just the card list.
+ */
 export default function Home() {
-  const [tab, setTabRaw] = useState(readTab);
-  const setTab = (v) => {
-    setTabRaw(v);
-    try { sessionStorage.setItem(TAB_KEY, v); } catch { /* private mode */ }
+  const { can } = useApp();
+  const [section, setSectionRaw] = useState(readSection);
+  if (!can('meeting')) return <div className="home"><Contacts /></div>;
+  const setSection = (v) => {
+    setSectionRaw(v);
+    try { if (v) sessionStorage.setItem(SECTION_KEY, v); else sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ }
   };
+
+  if (!SECTIONS.some((s) => s.value === section)) {
+    return (
+      <div className="home home-pick">
+        <h1 className="sr-only">Choose where to go</h1>
+        <div className="home-tiles">
+          {SECTIONS.map((s) => (
+            <button key={s.value} type="button" className="home-tile" onClick={() => setSection(s.value)}>
+              <img src={s.img} alt="" />
+              <span>{s.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="home">
-      <Tabs
-        label="Home"
-        className="home-tabs"
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          { value: 'cards', label: 'Business Cards', ...TAB_ICONS.cards },
-          { value: 'minutes', label: 'Meeting Minutes', ...TAB_ICONS.minutes },
-        ]}
-      />
-      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === 'cards' ? <Contacts /> : <Minutes />}
-      </div>
+      <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>
+        <Icon name="chevronLeft" size={16} /> Back
+      </button>
+      {section === 'cards' ? <Contacts /> : <Minutes />}
     </div>
   );
 }

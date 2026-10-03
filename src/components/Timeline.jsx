@@ -3,18 +3,16 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import Recorder, { useSpeechLanguage, whisperLang } from './Recorder.jsx';
 import { isMinutes, minutesRow, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
 
 export default function Timeline({ contact, canAdd, onContactChanged }) {
-  const { api, uid, role, memberName, toast } = useApp();
+  const { api, uid, role, memberName, toast, can } = useApp();
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(null); // null | 'new' | 'record' | interaction
-  const [making, setMaking] = useState(null); // id of the recording entry minutes are being made for
+  const [editing, setEditing] = useState(null); // null | 'new' | interaction
 
   const loadItems = useCallback(async () => {
     try {
@@ -34,77 +32,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
     if (bumped) await onContactChanged();
   };
 
-  // A recording is saved as soon as Stop is tapped; the editor stays open on that entry.
-  const onAutoSaved = async (saved) => {
-    setEditing(saved);
-    await loadItems();
-    await onContactChanged();
-  };
-
-  const removeRecording = async (i) => {
-    try {
-      await api.removeStorageObjects('recordings', [i.audio_path]);
-      const updated = await api.updateInteraction(i.id, { audio_path: null, duration_sec: null });
-      setItems((list) => list.map((x) => (x.id === i.id ? updated : x)));
-      toast('Recording deleted');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
-
-  // Recording -> transcript (Whisper) -> minutes (Claude) -> a new Note on this contact.
-  const makeMinutes = async (i) => {
-    setMaking(i.id);
-    try {
-      let transcript = i.transcript || '';
-      if (!transcript) {
-        try {
-          const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-          transcript = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
-        } catch (e) {
-          if (e.code !== 'not_configured') throw e;
-          if (!i.notes) {
-            throw new Error('Turning a recording into text needs transcription switched on. Ask your admin to add the AI_GATEWAY_API_KEY secret in Supabase.');
-          }
-        }
-        if (!transcript && !i.notes) throw new Error('No speech was found in this recording.');
-        if (transcript) await api.updateInteraction(i.id, { transcript });
-      }
-      const ai = await api.summarise({
-        notes: i.notes || '',
-        transcript,
-        kind: i.kind,
-        contact: { full_name: contact.full_name, company: contact.company, job_title: contact.job_title, lead_status: contact.lead_status },
-        today: i.occurred_on,
-      });
-      await api.insertInteraction({ ...minutesRow(i, ai, transcript), contact_id: contact.id, workspace_id: contact.workspace_id });
-      await loadItems();
-      toast('Saved. Minutes added as a note.');
-    } catch (e) {
-      toast(`Could not make minutes: ${e.message}`, 'error');
-    } finally {
-      setMaking(null);
-    }
-  };
-
-  const share = async (i) => {
-    try {
-      const r = await shareOrCopy(i.title || i.kind, shareText(i, contact, formatDate));
-      if (r === 'copied') toast('Copied. Paste it into WhatsApp, email or anywhere.');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
-
-  const remove = async (i) => {
-    try {
-      await api.deleteInteraction(i);
-      setItems((list) => list.filter((x) => x.id !== i.id));
-      toast('Entry deleted');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
+  const { making, makeMinutes, share, removeRecording, remove } = useEntryActions({ reload: loadItems, contactFor: () => contact });
 
   return (
     <div className="timeline">
@@ -113,19 +41,14 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
           <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
             <Icon name="plus" size={16} /> Add meeting or note
           </button>
-          <button type="button" className="btn btn-outline" onClick={() => setEditing('record')}>
-            <Icon name="mic" size={16} /> Record conversation
-          </button>
         </div>
       )}
       {editing && (
         <InteractionEditor
           contact={contact}
           existing={typeof editing === 'object' ? editing : null}
-          autoRecord={editing === 'record'}
           onCancel={() => setEditing(null)}
           onSaved={onSaved}
-          onAutoSaved={onAutoSaved}
         />
       )}
 
@@ -146,6 +69,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
                 i={i}
                 author={i.created_by === uid ? 'You' : memberName(i.created_by)}
                 canEdit={canEditInteraction(i, contact, role, uid)}
+                canMakeMinutes={can('meeting')}
                 onEdit={() => setEditing(i)}
                 onDelete={() => remove(i)}
                 onDeleteRecording={() => removeRecording(i)}
@@ -162,6 +86,86 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
   );
 }
 
+/**
+ * What can be done to a saved entry: make AI minutes from its recording, share
+ * it, delete its recording or delete it. contactFor(entry) gives its card, or
+ * null for a meeting recorded without one.
+ */
+export function useEntryActions({ reload, contactFor }) {
+  const { api, toast } = useApp();
+  const [making, setMaking] = useState(null); // id of the entry minutes are being made for
+
+  const removeRecording = async (i) => {
+    try {
+      await api.removeStorageObjects('recordings', [i.audio_path]);
+      await api.updateInteraction(i.id, { audio_path: null, duration_sec: null });
+      await reload();
+      toast('Recording deleted');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  // Recording -> transcript -> minutes (Claude) -> a new Note next to it.
+  const makeMinutes = async (i) => {
+    const contact = contactFor(i);
+    setMaking(i.id);
+    try {
+      let transcript = i.transcript || '';
+      if (!transcript) {
+        try {
+          const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
+          transcript = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
+        } catch (e) {
+          if (e.code !== 'not_configured') throw e;
+          if (!i.notes) {
+            throw new Error('Turning a recording into text needs transcription switched on. Ask your admin to add the AI_GATEWAY_API_KEY secret in Supabase.');
+          }
+        }
+        if (!transcript && !i.notes) throw new Error('No speech was found in this recording.');
+        if (transcript) await api.updateInteraction(i.id, { transcript });
+      }
+      const ai = await api.summarise({
+        notes: i.notes || '',
+        transcript,
+        kind: i.kind,
+        contact: contact
+          ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title, lead_status: contact.lead_status }
+          : {},
+        today: i.occurred_on,
+      });
+      await api.insertInteraction({ ...minutesRow(i, ai, transcript), contact_id: i.contact_id || null, workspace_id: i.workspace_id });
+      await reload();
+      toast('Saved. Minutes added as a note.');
+    } catch (e) {
+      toast(`Could not make minutes: ${e.message}`, 'error');
+    } finally {
+      setMaking(null);
+    }
+  };
+
+  const share = async (i) => {
+    try {
+      const r = await shareOrCopy(i.title || i.kind, shareText(i, contactFor(i), formatDate));
+      if (r === 'copied') toast('Copied. Paste it into WhatsApp, email or anywhere.');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const remove = async (i) => {
+    try {
+      await api.deleteInteraction(i);
+      await reload();
+      toast('Entry deleted');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  return { making, makeMinutes, share, removeRecording, remove };
+}
+
 /** When a recording was made: from its file name (…-<ms>.ext), else when the entry was created. */
 export function recordedAt(i) {
   const m = /-(\d{13})\.\w+$/.exec(i.audio_path || '');
@@ -170,7 +174,7 @@ export function recordedAt(i) {
 }
 const formatDateTime = (d) => d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
+export function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
   const { ensureSigned, signed } = useApp();
   useEffect(() => { if (i.audio_path) ensureSigned('recordings', [i.audio_path]); }, [i.audio_path, ensureSigned]);
   const audio = i.audio_path ? signed('recordings', i.audio_path) : null;
@@ -184,7 +188,7 @@ function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making
           <span className="muted small">· {author}</span>
           {canEdit && (
             <span className="entry-tools">
-              <button type="button" className="icon-btn" onClick={onEdit} aria-label="Edit entry"><Icon name="edit" size={16} /></button>
+              {onEdit && <button type="button" className="icon-btn" onClick={onEdit} aria-label="Edit entry"><Icon name="edit" size={16} /></button>}
               <ConfirmButton className="icon-btn" icon="trash" confirmLabel="Delete" message="Delete entry?" onConfirm={onDelete}>
                 <span className="sr-only">Delete entry</span>
               </ConfirmButton>
@@ -213,7 +217,7 @@ function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making
               {i.duration_sec != null && <span className="mono muted"> · {formatDuration(i.duration_sec)}</span>}
             </span>
             {audio ? <audio controls preload="none" src={audio} aria-label={`Recording, ${formatDuration(i.duration_sec)}`} /> : <span className="muted small">Loading recording…</span>}
-            {canEdit && (
+            {canEdit && canMakeMinutes && (
               <button type="button" className="btn btn-outline btn-sm" onClick={onMakeMinutes} disabled={busy}>
                 {making ? <><Spinner /> Making minutes…</> : <><Icon name="sparkles" size={14} /> Make minutes with AI</>}
               </button>
@@ -241,9 +245,9 @@ function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making
   );
 }
 
-function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, onAutoSaved }) {
-  const { api, toast, upsertContact } = useApp();
-  const [lang, setLang] = useSpeechLanguage();
+function InteractionEditor({ contact, existing, onCancel, onSaved }) {
+  const { api, toast, upsertContact, can } = useApp();
+  const ai = can('meeting');
   const [f, setF] = useState(() => ({
     kind: existing?.kind || 'Meeting',
     occurred_on: existing?.occurred_on || todayISO(),
@@ -253,9 +257,6 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
     summary: existing?.summary || '',
     action_items: existing?.action_items || [],
   }));
-  const [recording, setRecording] = useState(null); // { blob, ext, duration, url }
-  const [transcribing, setTranscribing] = useState(false);
-  const [transcribeMsg, setTranscribeMsg] = useState('');
   const [summarising, setSummarising] = useState(false);
   const [suggest, setSuggest] = useState(null); // { follow_up_on, lead_status }
   const [apply, setApply] = useState(true);
@@ -263,72 +264,8 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
   const { ensureSigned, signed } = useApp();
 
   useEffect(() => { if (existing?.audio_path) ensureSigned('recordings', [existing.audio_path]); }, [existing, ensureSigned]);
-  useEffect(() => () => { if (recording?.url) URL.revokeObjectURL(recording.url); }, [recording]);
 
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
-
-  const [recSaving, setRecSaving] = useState(false);
-  const [recError, setRecError] = useState('');
-
-  // Save the recording straight away so it can't be lost; notes can be added after.
-  const saveRecording = async (r, fields) => {
-    setRecSaving(true);
-    setRecError('');
-    try {
-      let saved = existing;
-      if (!saved) {
-        saved = await api.insertInteraction({
-          kind: fields.kind,
-          occurred_on: fields.occurred_on || todayISO(),
-          title: fields.title.trim() || 'Recorded conversation',
-          notes: fields.notes.trim() || null,
-          transcript: fields.transcript.trim() || null,
-          contact_id: contact.id,
-          workspace_id: contact.workspace_id,
-        });
-      }
-      const path = await api.uploadRecording(contact.workspace_id, contact.id, saved.id, r.blob, r.ext);
-      const patch = { audio_path: path, duration_sec: r.duration };
-      if (r.liveTranscript && !existing) patch.transcript = fields.transcript.trim() || null;
-      saved = await api.updateInteraction(saved.id, patch);
-      if (existing?.audio_path && existing.audio_path !== path) {
-        api.removeStorageObjects('recordings', [existing.audio_path]).catch(() => {});
-      }
-      setRecording((cur) => (cur === r ? { ...r, saved: true } : cur));
-      if (!fields.title.trim() && !existing) setF((x) => ({ ...x, title: 'Recorded conversation' }));
-      toast('Saved. Recording added to the timeline.');
-      await onAutoSaved(saved);
-    } catch (e) {
-      setRecError(`The recording was not saved: ${e.message}`);
-      toast(`The recording was not saved: ${e.message}`, 'error');
-    } finally {
-      setRecSaving(false);
-    }
-  };
-
-  const onRecorded = (r) => {
-    setRecording(r);
-    setTranscribeMsg('');
-    const fields = r.liveTranscript ? { ...f, transcript: f.transcript ? `${f.transcript}\n\n${r.liveTranscript}` : r.liveTranscript } : f;
-    if (r.liveTranscript) setF(fields);
-    saveRecording(r, fields);
-  };
-
-  const doTranscribe = async () => {
-    setTranscribing(true);
-    setTranscribeMsg('');
-    try {
-      const text = await api.transcribe(recording.blob, whisperLang(lang), recording.ext);
-      setF((x) => ({ ...x, transcript: text }));
-      toast('Transcript ready');
-    } catch (e) {
-      setTranscribeMsg(e.code === 'not_configured'
-        ? 'Server transcription is not set up for Nomiqo yet (it needs the AI Gateway key). Use the live transcript or type your notes instead.'
-        : `Transcription failed: ${e.message}`);
-    } finally {
-      setTranscribing(false);
-    }
-  };
 
   const doSummarise = async () => {
     if (!f.notes.trim() && !f.transcript.trim()) {
@@ -366,24 +303,11 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
       transcript: f.transcript.trim() || null,
       summary: f.summary.trim() || null,
       action_items: f.action_items.map((a) => a.trim()).filter(Boolean),
-      ...(recording ? { duration_sec: recording.duration } : {}),
     };
     try {
-      let saved = existing
+      const saved = existing
         ? await api.updateInteraction(existing.id, row)
         : await api.insertInteraction({ ...row, contact_id: contact.id, workspace_id: contact.workspace_id });
-
-      if (recording && !recording.saved) {
-        try {
-          const path = await api.uploadRecording(contact.workspace_id, contact.id, saved.id, recording.blob, recording.ext);
-          if (existing?.audio_path && existing.audio_path !== path) {
-            await api.removeStorageObjects('recordings', [existing.audio_path]).catch(() => {});
-          }
-          saved = await api.updateInteraction(saved.id, { audio_path: path });
-        } catch (err) {
-          toast(`Entry saved, but the recording did not upload: ${err.message}`, 'error');
-        }
-      }
 
       let bumped = row.kind !== 'Note';
       if (suggest && apply) {
@@ -436,28 +360,13 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
         <textarea id="int-notes" rows={4} value={f.notes} onChange={set('notes')} />
       </div>
 
-      <div className="field">
-        <span className="label">Recording</span>
-        {existingAudio && !recording && (
-          <div className="entry-audio"><audio controls src={existingAudio} aria-label="Saved recording" /> <span className="muted small">Recording a new one replaces it.</span></div>
-        )}
-        {recording ? (
-          <div className="rec-done">
-            <audio controls src={recording.url} aria-label="New recording" />
-            <span className="mono small">{formatDuration(recording.duration)}</span>
-            <button type="button" className="btn btn-outline btn-sm" onClick={doTranscribe} disabled={transcribing}>
-              {transcribing ? <><Spinner /> Transcribing…</> : <><Icon name="edit" size={14} /> Transcribe recording</>}
-            </button>
-            {recSaving ? <span className="small muted"><Spinner /> Saving recording…</span>
-              : recording.saved ? <span className="small rec-saved"><Icon name="check" size={14} /> Saved</span>
-                : <button type="button" className="btn btn-outline btn-sm" onClick={() => saveRecording(recording, f)}>Try saving again</button>}
-          </div>
-        ) : (
-          <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} autoStart={autoRecord} />
-        )}
-        {recError && <p className="form-error" role="alert">{recError}</p>}
-        {transcribeMsg && <p className="notice notice-warn">{transcribeMsg}</p>}
-      </div>
+      {/* New recordings can no longer be made from Notes & meetings; earlier ones stay playable. */}
+      {existingAudio && (
+        <div className="field">
+          <span className="label">Recording</span>
+          <div className="entry-audio"><audio controls src={existingAudio} aria-label="Saved recording" /></div>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="int-transcript">Transcript</label>
@@ -467,9 +376,11 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
       <div className="ai-box">
         <div className="ai-head">
           <span className="label"><Icon name="sparkles" size={14} /> AI summary</span>
-          <button type="button" className="btn btn-outline btn-sm" onClick={doSummarise} disabled={summarising}>
-            {summarising ? <><Spinner /> Summarising…</> : <><Icon name="sparkles" size={14} /> Summarise with AI</>}
-          </button>
+          {ai && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={doSummarise} disabled={summarising}>
+              {summarising ? <><Spinner /> Summarising…</> : <><Icon name="sparkles" size={14} /> Summarise with AI</>}
+            </button>
+          )}
         </div>
         <div className="field">
           <label htmlFor="int-summary" className="sr-only">Summary</label>

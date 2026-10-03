@@ -11,7 +11,7 @@ import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../im
 import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, SaveLabel, useJustSaved, formatDate, initials } from './ui.jsx';
 
 export default function ContactDetail({ contact, onClose, initialTab = 'details' }) {
-  const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed } = useApp();
+  const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed, can } = useApp();
   const [tab, setTab] = useState(initialTab);
   const [side, setSide] = useState('front');
   const [base, setBase] = useState(() => toDraft(contact)); // what editing started from
@@ -289,7 +289,7 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
                   <Icon name="check" size={16} /> {contact.last_contacted_on === today ? 'Contacted today' : 'Log contact today'}
                 </button>
               )}
-              {editable && (
+              {editable && can('share') && (
                 <button type="button" className={`btn btn-outline ${sharing ? 'has-active' : ''}`} aria-expanded={sharing} onClick={() => setSharing((v) => !v)}>
                   <Icon name="send" size={16} /> Share
                 </button>
