@@ -409,7 +409,7 @@ export async function deleteInteraction(interaction) {
 }
 
 export async function uploadRecording(workspaceId, contactId, interactionId, blob, ext) {
-  const path = `${workspaceId}/${contactId}/${interactionId}.${ext}`;
+  const path = `${workspaceId}/${contactId}/${interactionId}-${Date.now()}.${ext}`; // the time in the name is when it was recorded
   const { error } = await supabase.storage.from('recordings').upload(path, blob, {
     contentType: blob.type || (ext === 'mp4' ? 'audio/mp4' : 'audio/webm'),
     upsert: true,

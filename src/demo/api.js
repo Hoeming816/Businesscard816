@@ -384,7 +384,7 @@ export async function deleteInteraction(interaction) {
 }
 export async function uploadRecording(ws, contactId, interactionId, blob, ext) {
   await sleep(250);
-  const path = `${ws}/${contactId}/${interactionId}.${ext}`;
+  const path = `${ws}/${contactId}/${interactionId}-${Date.now()}.${ext}`; // the time in the name is when it was recorded
   db.blobs.set(path, URL.createObjectURL(blob));
   return path;
 }

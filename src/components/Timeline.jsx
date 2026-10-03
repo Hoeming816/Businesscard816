@@ -33,6 +33,24 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
     toast('Saved');
   };
 
+  // A recording is saved as soon as Stop is tapped; the editor stays open on that entry.
+  const onAutoSaved = async (saved) => {
+    setEditing(saved);
+    await loadItems();
+    await onContactChanged();
+  };
+
+  const removeRecording = async (i) => {
+    try {
+      await api.removeStorageObjects('recordings', [i.audio_path]);
+      const updated = await api.updateInteraction(i.id, { audio_path: null, duration_sec: null });
+      setItems((list) => list.map((x) => (x.id === i.id ? updated : x)));
+      toast('Recording deleted');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
   const remove = async (i) => {
     try {
       await api.deleteInteraction(i);
@@ -62,6 +80,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
           autoRecord={editing === 'record'}
           onCancel={() => setEditing(null)}
           onSaved={onSaved}
+          onAutoSaved={onAutoSaved}
         />
       )}
 
@@ -84,6 +103,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
                 canEdit={canEditInteraction(i, contact, role, uid)}
                 onEdit={() => setEditing(i)}
                 onDelete={() => remove(i)}
+                onDeleteRecording={() => removeRecording(i)}
               />
             )
           ))}
@@ -93,7 +113,15 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
   );
 }
 
-function Entry({ i, author, canEdit, onEdit, onDelete }) {
+/** When a recording was made: from its file name (…-<ms>.ext), else when the entry was created. */
+export function recordedAt(i) {
+  const m = /-(\d{13})\.\w+$/.exec(i.audio_path || '');
+  const d = m ? new Date(Number(m[1])) : new Date(i.created_at);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const formatDateTime = (d) => d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording }) {
   const { ensureSigned, signed } = useApp();
   useEffect(() => { if (i.audio_path) ensureSigned('recordings', [i.audio_path]); }, [i.audio_path, ensureSigned]);
   const audio = i.audio_path ? signed('recordings', i.audio_path) : null;
@@ -130,8 +158,16 @@ function Entry({ i, author, canEdit, onEdit, onDelete }) {
         )}
         {i.audio_path && (
           <div className="entry-audio">
+            <span className="rec-meta small">
+              <Icon name="mic" size={13} /> Recorded {recordedAt(i) ? formatDateTime(recordedAt(i)) : ''}
+              {i.duration_sec != null && <span className="mono muted"> · {formatDuration(i.duration_sec)}</span>}
+            </span>
             {audio ? <audio controls preload="none" src={audio} aria-label={`Recording, ${formatDuration(i.duration_sec)}`} /> : <span className="muted small">Loading recording…</span>}
-            {i.duration_sec != null && <span className="mono small muted">{formatDuration(i.duration_sec)}</span>}
+            {canEdit && (
+              <ConfirmButton className="btn btn-ghost btn-sm" icon="trash" confirmLabel="Delete recording" message="Delete this recording? The entry and its notes stay." onConfirm={onDeleteRecording}>
+                Delete recording
+              </ConfirmButton>
+            )}
           </div>
         )}
         {i.transcript && (
@@ -145,7 +181,7 @@ function Entry({ i, author, canEdit, onEdit, onDelete }) {
   );
 }
 
-function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved }) {
+function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, onAutoSaved }) {
   const { api, toast, upsertContact } = useApp();
   const [lang, setLang] = useSpeechLanguage();
   const [f, setF] = useState(() => ({
@@ -171,10 +207,51 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved })
 
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
+  const [recSaving, setRecSaving] = useState(false);
+  const [recError, setRecError] = useState('');
+
+  // Save the recording straight away so it can't be lost; notes can be added after.
+  const saveRecording = async (r, fields) => {
+    setRecSaving(true);
+    setRecError('');
+    try {
+      let saved = existing;
+      if (!saved) {
+        saved = await api.insertInteraction({
+          kind: fields.kind,
+          occurred_on: fields.occurred_on || todayISO(),
+          title: fields.title.trim() || 'Recorded conversation',
+          notes: fields.notes.trim() || null,
+          transcript: fields.transcript.trim() || null,
+          contact_id: contact.id,
+          workspace_id: contact.workspace_id,
+        });
+      }
+      const path = await api.uploadRecording(contact.workspace_id, contact.id, saved.id, r.blob, r.ext);
+      const patch = { audio_path: path, duration_sec: r.duration };
+      if (r.liveTranscript && !existing) patch.transcript = fields.transcript.trim() || null;
+      saved = await api.updateInteraction(saved.id, patch);
+      if (existing?.audio_path && existing.audio_path !== path) {
+        api.removeStorageObjects('recordings', [existing.audio_path]).catch(() => {});
+      }
+      setRecording((cur) => (cur === r ? { ...r, saved: true } : cur));
+      if (!fields.title.trim() && !existing) setF((x) => ({ ...x, title: 'Recorded conversation' }));
+      toast('Saved. Recording added to the timeline.');
+      await onAutoSaved(saved);
+    } catch (e) {
+      setRecError(`The recording was not saved: ${e.message}`);
+      toast(`The recording was not saved: ${e.message}`, 'error');
+    } finally {
+      setRecSaving(false);
+    }
+  };
+
   const onRecorded = (r) => {
     setRecording(r);
     setTranscribeMsg('');
-    if (r.liveTranscript) setF((x) => ({ ...x, transcript: x.transcript ? `${x.transcript}\n\n${r.liveTranscript}` : r.liveTranscript }));
+    const fields = r.liveTranscript ? { ...f, transcript: f.transcript ? `${f.transcript}\n\n${r.liveTranscript}` : r.liveTranscript } : f;
+    if (r.liveTranscript) setF(fields);
+    saveRecording(r, fields);
   };
 
   const doTranscribe = async () => {
@@ -235,7 +312,7 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved })
         ? await api.updateInteraction(existing.id, row)
         : await api.insertInteraction({ ...row, contact_id: contact.id, workspace_id: contact.workspace_id });
 
-      if (recording) {
+      if (recording && !recording.saved) {
         try {
           const path = await api.uploadRecording(contact.workspace_id, contact.id, saved.id, recording.blob, recording.ext);
           if (existing?.audio_path && existing.audio_path !== path) {
@@ -307,11 +384,14 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved })
             <button type="button" className="btn btn-outline btn-sm" onClick={doTranscribe} disabled={transcribing}>
               {transcribing ? <><Spinner /> Transcribing…</> : <><Icon name="edit" size={14} /> Transcribe recording</>}
             </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRecording(null)}>Discard</button>
+            {recSaving ? <span className="small muted"><Spinner /> Saving recording…</span>
+              : recording.saved ? <span className="small rec-saved"><Icon name="check" size={14} /> Saved</span>
+                : <button type="button" className="btn btn-outline btn-sm" onClick={() => saveRecording(recording, f)}>Try saving again</button>}
           </div>
         ) : (
           <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} autoStart={autoRecord} />
         )}
+        {recError && <p className="form-error" role="alert">{recError}</p>}
         {transcribeMsg && <p className="notice notice-warn">{transcribeMsg}</p>}
       </div>
 

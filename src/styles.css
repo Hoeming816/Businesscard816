@@ -1032,3 +1032,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   .saved-flash { animation: saved-flash-fade 1.6s linear forwards; transform: translate(-50%, -50%); }
   @keyframes saved-flash-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 }
+.entry-audio { flex-wrap: wrap; }
+.rec-meta { flex-basis: 100%; display: block; color: var(--ink-2); font-weight: 600; }
+.rec-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-weight: 600; }
+.rec-meta .icon { vertical-align: -2px; margin-right: 4px; }
