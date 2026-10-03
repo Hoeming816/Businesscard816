@@ -359,7 +359,7 @@ export async function listWorkspaceInteractions(ws, limit = 500) {
   await tick();
   const seen = new Set(db.contacts.filter((c) => c.workspace_id === ws && visible(c)).map((c) => c.id));
   return db.interactions
-    .filter((i) => seen.has(i.contact_id))
+    .filter((i) => seen.has(i.contact_id) || (!i.contact_id && i.workspace_id === ws && i.created_by === uid()))
     .sort((a, b) => b.occurred_on.localeCompare(a.occurred_on) || b.created_at.localeCompare(a.created_at))
     .slice(0, limit)
     .map(clone);
@@ -371,11 +371,12 @@ function bump(i) {
 }
 export async function insertInteraction(row) {
   await sleep(200);
-  const c = db.contacts.find((x) => x.id === row.contact_id);
-  if (!c || !canEditContact(c, roleIn(c.workspace_id), uid())) deny();
+  const c = row.contact_id ? db.contacts.find((x) => x.id === row.contact_id) : null;
+  if (row.contact_id ? !c || !canEditContact(c, roleIn(c.workspace_id), uid()) : !roleIn(row.workspace_id)) deny();
   const i = {
     action_items: [], title: null, notes: null, transcript: null, summary: null, audio_path: null, duration_sec: null,
-    ...clone(row), id: newId('i'), workspace_id: c.workspace_id, created_by: uid(), created_at: now(), updated_at: now(),
+    ...clone(row), id: newId('i'), contact_id: c ? c.id : null, workspace_id: c ? c.workspace_id : row.workspace_id,
+    created_by: uid(), created_at: now(), updated_at: now(),
   };
   db.interactions.push(i);
   bump(i);
@@ -385,7 +386,7 @@ export async function updateInteraction(id, patch) {
   await tick();
   const i = db.interactions.find((x) => x.id === id);
   const c = db.contacts.find((x) => x.id === i?.contact_id);
-  if (!i || !c || !canEditInteraction(i, c, roleIn(c.workspace_id), uid())) deny();
+  if (!i || !canEditInteraction(i, c, c && roleIn(c.workspace_id), uid())) deny();
   const { created_by: _a, contact_id: _b, workspace_id: _c, ...rest } = clone(patch);
   Object.assign(i, rest, { updated_at: now() });
   bump(i);
@@ -395,7 +396,7 @@ export async function deleteInteraction(interaction) {
   await tick();
   const i = db.interactions.find((x) => x.id === interaction.id);
   const c = db.contacts.find((x) => x.id === i?.contact_id);
-  if (!i || !c || !canEditInteraction(i, c, roleIn(c.workspace_id), uid())) deny();
+  if (!i || !canEditInteraction(i, c, c && roleIn(c.workspace_id), uid())) deny();
   db.interactions = db.interactions.filter((x) => x.id !== i.id);
 }
 export async function uploadRecording(ws, contactId, interactionId, blob, ext) {
@@ -426,7 +427,7 @@ export async function summarise({ contact, today, notes, transcript }) {
   const source = String(notes || transcript || '').trim().replace(/\s+/g, ' ');
   const gist = (source.length > 160 ? `${source.slice(0, 157)}…` : source).replace(/[.!?]+$/, '');
   return {
-    summary: `${contact?.full_name || 'The contact'} (${contact?.company || 'their company'}) covered the points in your notes: "${gist}". `
+    summary: `${contact?.full_name ? `${contact.full_name} (${contact.company || 'their company'})` : 'The meeting'} covered the points in your notes: "${gist}". `
       + 'They are open to a site survey followed by a written proposal, and the next step is to confirm scope, timeline and the budget owner. '
       + '(Demo summary: the live app writes this with Claude.)',
     key_points: ['Network refresh planned across two Singapore sites next year', 'Ageing core switches and patchy Wi-Fi on the operations floor', 'Proposal wanted by the end of the month, site survey first'],

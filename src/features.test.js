@@ -22,3 +22,19 @@ describe('featureOn', () => {
     expect(FEATURES.map((f) => f.key)).toEqual(['scan_ai', 'share', 'meeting']);
   });
 });
+
+import { canEditInteraction } from './perms.js';
+
+describe('meetings without a contact', () => {
+  it('belong only to whoever recorded them', () => {
+    const i = { contact_id: null, created_by: 'u1' };
+    expect(canEditInteraction(i, null, 'viewer', 'u1')).toBe(true);
+    expect(canEditInteraction(i, null, 'admin', 'u2')).toBe(false);
+  });
+  it('with a contact follow the card owner', () => {
+    const c = { created_by: 'u1' };
+    expect(canEditInteraction({ contact_id: 'c' }, c, 'editor', 'u1')).toBe(true);
+    expect(canEditInteraction({ contact_id: 'c' }, c, 'editor', 'u2')).toBe(false);
+    expect(canEditInteraction({ contact_id: 'c' }, undefined, 'editor', 'u1')).toBe(false);
+  });
+});
