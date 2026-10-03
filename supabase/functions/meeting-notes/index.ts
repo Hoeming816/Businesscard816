@@ -32,6 +32,8 @@ Return:
 
 Write summary, key_points and action_items in the language the conversation was held in. If it is in Chinese, write in Chinese; if it mixes languages (for example English and Chinese), keep that mix as the speakers did, and keep names, product terms and numbers exactly as spoken. Do not translate.
 
+Leave out small talk, jokes and topics unrelated to the business discussed.
+
 Only use what is in the notes and transcript; do not invent facts. A transcript from live speech recognition may contain recognition errors, so read it for meaning.`;
 
 async function summarise(body: Record<string, unknown>) {
@@ -143,6 +145,8 @@ Return:
 - follow_up: for each open action item from earlier meetings (listed in <earlier_actions>, each with a ref) that this meeting talked about: its ref, status "completed" when the meeting says it is done, otherwise "discussed", and a short note of what was said about it. Leave out items the meeting did not mention. Empty list if there are none.
 
 The meeting type tells you what to concentrate on; give those things the most care and detail.
+
+Leave out everything that is not business: small talk, jokes and banter, personal chat, and topics unrelated to the meeting's purpose. They must not appear in any field, not even as an agenda item or a passing mention. The full transcript is kept separately, so nothing is lost by leaving them out.
 
 Write in the language the meeting was held in. If it is in Chinese, write in Chinese; if it mixes languages (for example English and Chinese), keep that mix as the speakers did, and keep names, product terms and numbers exactly as spoken. Do not translate.
 
