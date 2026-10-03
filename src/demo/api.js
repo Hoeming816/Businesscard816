@@ -397,6 +397,7 @@ export async function deleteInteraction(interaction) {
   const i = db.interactions.find((x) => x.id === interaction.id);
   const c = db.contacts.find((x) => x.id === i?.contact_id);
   if (!i || !canEditInteraction(i, c, c && roleIn(c.workspace_id), uid())) deny();
+  if (i.audio_path) db.blobs.delete(i.audio_path);
   db.interactions = db.interactions.filter((x) => x.id !== i.id);
 }
 export async function uploadRecording(ws, contactId, interactionId, blob, ext) {

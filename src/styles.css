@@ -788,7 +788,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .member > .avatar { grid-area: av; align-self: start; }
 .member-main { grid-area: main; display: grid; min-width: 0; }
 .member-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.member-meta { grid-area: meta; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.member-meta { grid-area: meta; display: flex; gap: 6px; flex-wrap: nowrap; }
 .member-role { grid-area: role; }
 .member-role select { min-height: 34px; text-transform: capitalize; }
 .role-text { text-transform: capitalize; font-size: 14px; color: var(--ink-2); padding-left: 4px; }
@@ -1056,3 +1056,8 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .minutes-list > li.is-open .minutes-row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .minutes-open { background: var(--surface); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; padding: 12px; display: grid; gap: 8px; justify-items: start; min-width: 0; }
 .minutes-open .entries { width: 100%; margin: 0; }
+.minutes-list > li { position: relative; }
+.minutes-row-tags { padding-right: 40px; }
+.minutes-del { position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; justify-content: flex-end; pointer-events: none; }
+.minutes-del > * { pointer-events: auto; }
+.minutes-del .confirm-inline { background: var(--surface); padding: 4px; border-radius: 10px; box-shadow: 0 2px 10px rgba(16, 24, 40, .12); flex-wrap: nowrap; }
