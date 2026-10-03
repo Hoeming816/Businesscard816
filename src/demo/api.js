@@ -71,7 +71,7 @@ const emit = () => listeners.forEach((cb) => cb(db.session ? { ...db.session } :
 export async function signIn(username) {
   await sleep(300);
   const p = db.profiles.find((x) => x.username === username.trim().toLowerCase()) || profile(ME);
-  if (p.status === 'suspended') {
+  if (p.status !== 'active') {
     const err = new Error('Access suspended');
     err.suspended = true;
     err.reason = p.suspended_reason || '';
@@ -457,13 +457,18 @@ export async function adminSetFeatures(userId, features) {
 export async function adminUserAction(action, userId, extra = {}) {
   await sleep(300);
   requireSuper();
-  if (userId === uid() && action === 'delete') throw new Error('You cannot delete your own account.');
+  if (userId === uid() && (action === 'delete' || action === 'purge')) throw new Error('You cannot delete your own account.');
   if (userId === uid() && action !== 'reset_password') throw new Error('You cannot suspend yourself.');
   const p = profile(userId);
   if (!p) throw new Error('No such account.');
   if (action === 'delete') {
+    if (p.is_super_admin && db.profiles.filter((x) => x.is_super_admin && x.status === 'active').length <= 1) throw new Error('You cannot delete the last super admin.');
+    Object.assign(p, { status: 'deleted', deleted_at: now() });
+    return;
+  }
+  if (action === 'purge') {
+    if (p.status !== 'deleted') throw new Error('Delete the account first.');
     if (String(extra.confirm_username || '').trim().toLowerCase() !== p.username) throw new Error(`Type ${p.username} to confirm.`);
-    if (p.is_super_admin && db.profiles.filter((x) => x.is_super_admin).length <= 1) throw new Error('You cannot delete the last super admin.');
     // Mirrors admin-users: shared workspaces pass to you, everything else of theirs goes.
     const gone = new Set();
     for (const w of db.workspaces.filter((x) => x.owner_id === userId)) {
@@ -484,7 +489,7 @@ export async function adminUserAction(action, userId, extra = {}) {
     return;
   }
   if (action === 'suspend') Object.assign(p, { status: 'suspended', suspended_reason: extra.reason || null });
-  else if (action === 'reinstate') Object.assign(p, { status: 'active', suspended_reason: null });
+  else if (action === 'reinstate') Object.assign(p, { status: 'active', suspended_reason: null, deleted_at: null });
   else if (action === 'reset_password') {
     if (!extra.password || extra.password.length < 8) throw new Error('Password should be at least 8 characters.');
   } else throw new Error('Unknown action');

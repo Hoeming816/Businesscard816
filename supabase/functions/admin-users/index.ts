@@ -1,11 +1,14 @@
 // admin-users: super admin account actions that need the Auth admin API.
 // suspend   -> profile suspended (fails every RLS check) + Auth ban (blocks sign-in)
-// reinstate -> reverses both
+// reinstate -> reverses suspend or delete
 // reset_password -> sets a new password chosen by the super admin
-// delete    -> removes the account for good: its login, its cards, notes,
-//              recordings and photos, and its share offers. Team workspaces it
+// delete    -> moves the account to Deleted users: status 'deleted' + Auth ban.
+//              Its cards, photos, notes and recordings are kept, so reinstate
+//              brings everything back.
+// purge     -> only for a deleted account: erases it for good (login, cards,
+//              notes, recordings, photos, share offers). Team workspaces it
 //              owns that still have other members pass to the super admin
-//              doing the delete, so nobody else loses their cards.
+//              doing it, so nobody else loses their cards.
 import { HttpError, json, requireCaller, serve, serviceClient } from "../_shared/http.ts";
 
 const BAN_FOREVER = "876000h"; // ~100 years
@@ -19,7 +22,7 @@ serve(async (req) => {
   if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new HttpError(400, "Choose an account.");
 
   const admin = serviceClient();
-  const { data: target } = await admin.from("profiles").select("id, username, is_super_admin").eq("id", userId).single();
+  const { data: target } = await admin.from("profiles").select("id, username, is_super_admin, status").eq("id", userId).single();
   if (!target) throw new HttpError(404, "That account no longer exists.");
 
   switch (body.action) {
@@ -35,7 +38,7 @@ serve(async (req) => {
     }
     case "reinstate": {
       const { error } = await admin.from("profiles")
-        .update({ status: "active", suspended_reason: null }).eq("id", userId);
+        .update({ status: "active", suspended_reason: null, deleted_at: null }).eq("id", userId);
       if (error) throw error;
       const { error: banError } = await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
       if (banError) throw banError;
@@ -50,12 +53,19 @@ serve(async (req) => {
     }
     case "delete": {
       if (userId === caller.id) throw new HttpError(400, "You cannot delete your own account.");
+      if (target.is_super_admin) await requireAnotherSuperAdmin(admin);
+      const { error } = await admin.from("profiles")
+        .update({ status: "deleted", deleted_at: new Date().toISOString() }).eq("id", userId);
+      if (error) throw error;
+      const { error: banError } = await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_FOREVER });
+      if (banError) throw banError;
+      break;
+    }
+    case "purge": {
+      if (userId === caller.id) throw new HttpError(400, "You cannot delete your own account.");
+      if (target.status !== "deleted") throw new HttpError(400, "Delete the account first; it can then be deleted permanently from Deleted users.");
       if (String(body.confirm_username ?? "").trim().toLowerCase() !== target.username) {
         throw new HttpError(400, `Type ${target.username} to confirm.`);
-      }
-      if (target.is_super_admin) {
-        const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_super_admin", true);
-        if ((count ?? 0) <= 1) throw new HttpError(400, "You cannot delete the last super admin.");
       }
       await deleteAccount(admin, userId, caller.id);
       break;
@@ -69,6 +79,12 @@ serve(async (req) => {
 });
 
 type Admin = ReturnType<typeof serviceClient>;
+
+async function requireAnotherSuperAdmin(admin: Admin) {
+  const { count } = await admin.from("profiles").select("id", { count: "exact", head: true })
+    .eq("is_super_admin", true).eq("status", "active");
+  if ((count ?? 0) <= 1) throw new HttpError(400, "You cannot delete the last super admin.");
+}
 
 async function deleteAccount(admin: Admin, userId: string, keeperId: string) {
   // Team workspaces this account owns that other people still use go to the

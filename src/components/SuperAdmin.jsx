@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
 import { memberStatus } from './Team.jsx';
-import { Icon, Pill, Spinner, Tabs, formatDate } from './ui.jsx';
+import { ConfirmButton, Icon, Pill, Spinner, Tabs, formatDate } from './ui.jsx';
 import { FEATURES, featureDefault, featureOn } from '../features.js';
 
 export default function SuperAdmin() {
@@ -23,8 +23,10 @@ export default function SuperAdmin() {
   }, [api]);
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  const live = profiles ? profiles.filter((p) => p.status !== 'deleted') : null;
+  const deleted = profiles ? profiles.filter((p) => p.status === 'deleted') : null;
   const counts = profiles && workspaces ? {
-    accounts: profiles.length,
+    accounts: live.length,
     active: profiles.filter((p) => p.status === 'active').length,
     workspaces: workspaces.length,
   } : null;
@@ -45,15 +47,20 @@ export default function SuperAdmin() {
 
       <Tabs
         label="Super admin sections"
+        className="admin-tabs"
         value={tab}
         onChange={setTab}
-        tabs={[{ value: 'accounts', label: 'Accounts', icon: 'user' }, { value: 'workspaces', label: 'Workspaces', icon: 'building' }]}
+        tabs={[
+          { value: 'accounts', label: 'Accounts', icon: 'user' },
+          { value: 'workspaces', label: 'Workspaces', icon: 'building' },
+          { value: 'deleted', label: `Deleted${deleted?.length ? ` (${deleted.length})` : ''}`, icon: 'trash' },
+        ]}
       />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="tabpanel">
         {!profiles ? <div className="loading-block"><Spinner /> Loading…</div>
-          : tab === 'accounts'
-            ? <Accounts profiles={profiles} reload={loadAll} toast={toast} />
-            : <Workspaces workspaces={workspaces} reload={loadAll} toast={toast} />}
+          : tab === 'accounts' ? <Accounts profiles={live} reload={loadAll} toast={toast} />
+            : tab === 'deleted' ? <DeletedUsers profiles={deleted} reload={loadAll} toast={toast} />
+              : <Workspaces workspaces={workspaces} reload={loadAll} toast={toast} />}
       </div>
     </div>
   );
@@ -71,7 +78,7 @@ function Stat({ label, value }) {
 function Accounts({ profiles, reload, toast }) {
   const { api, uid, setProfile } = useApp();
   const [q, setQ] = useState('');
-  const [action, setAction] = useState(null); // { id, kind: 'suspend' | 'reset' | 'features' | 'delete' }
+  const [action, setAction] = useState(null); // { id, kind: 'suspend' | 'reset' | 'features' }
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -84,7 +91,7 @@ function Accounts({ profiles, reload, toast }) {
     setBusy(true);
     try {
       await api.adminUserAction(kind, p.id, extra);
-      toast({ suspend: `Access cancelled for @${p.username}`, reinstate: `@${p.username} reinstated`, delete: `@${p.username} deleted` }[kind] || `Password reset for @${p.username}`);
+      toast({ suspend: `Access cancelled for @${p.username}`, reinstate: `@${p.username} reinstated`, delete: `@${p.username} moved to Deleted users` }[kind] || `Password reset for @${p.username}`);
       setAction(null);
       setInput('');
       await reload();
@@ -110,7 +117,6 @@ function Accounts({ profiles, reload, toast }) {
             {list.map((p) => {
               const self = p.id === uid;
               const open = action && action.id === p.id;
-              const confirmed = input.trim().toLowerCase() === p.username;
               return (
                 <Fragment key={p.id}>
                   <tr className={p.status === 'suspended' ? 'is-inactive' : ''}>
@@ -143,11 +149,13 @@ function Accounts({ profiles, reload, toast }) {
                         onClick={() => { setAction({ id: p.id, kind: 'reset' }); setInput(''); }}>
                         Reset password
                       </button>
-                      <button type="button" className="btn btn-danger-ghost btn-sm" disabled={self || busy}
-                        title={self ? 'You cannot delete your own account' : undefined}
-                        onClick={() => { setAction({ id: p.id, kind: 'delete' }); setInput(''); }}>
-                        <Icon name="trash" size={14} /> Delete account
-                      </button>
+                      {!self && (
+                        <ConfirmButton className="btn btn-danger-ghost btn-sm" icon="trash" disabled={busy}
+                          confirmLabel="Delete" message={`Move @${p.username} to Deleted users? They can't sign in; their records are kept.`}
+                          onConfirm={() => run('delete', p)}>
+                          Delete account
+                        </ConfirmButton>
+                      )}
                     </td>
                   </tr>
                   {open && action.kind === 'features' && (
@@ -171,33 +179,24 @@ function Accounts({ profiles, reload, toast }) {
                           onSubmit={(e) => {
                             e.preventDefault();
                             if (action.kind === 'suspend') run('suspend', p, { reason: input.trim() || undefined });
-                            else if (action.kind === 'delete') { if (confirmed) run('delete', p, { confirm_username: input.trim() }); }
                             else if (input.length >= 8) run('reset_password', p, { password: input });
                           }}
                         >
                           <div className="field grow">
                             <label htmlFor={`act-${p.id}`}>
-                              {action.kind === 'suspend' ? `Reason shown to @${p.username}`
-                                : action.kind === 'delete' ? `Type ${p.username} to delete this account`
-                                  : `New password for @${p.username} (8+ characters)`}
+                              {action.kind === 'suspend' ? `Reason shown to @${p.username}` : `New password for @${p.username} (8+ characters)`}
                             </label>
                             <input id={`act-${p.id}`} autoFocus type={action.kind === 'reset' ? 'text' : 'text'} autoComplete="off"
                               className={action.kind === 'reset' ? 'mono' : undefined}
                               value={input} onChange={(e) => setInput(e.target.value)} />
                           </div>
                           <button type="submit" className={`btn ${action.kind === 'reset' ? 'btn-primary' : 'btn-danger'}`}
-                            disabled={busy || (action.kind === 'reset' && input.length < 8) || (action.kind === 'delete' && !confirmed)}>
-                            {{ suspend: 'Cancel access', delete: 'Delete for good' }[action.kind] || 'Set password'}
+                            disabled={busy || (action.kind === 'reset' && input.length < 8)}>
+                            {action.kind === 'suspend' ? 'Cancel access' : 'Set password'}
                           </button>
                           <button type="button" className="btn btn-ghost" onClick={() => setAction(null)}>Back</button>
                         </form>
                         {action.kind === 'suspend' && <p className="help">They are signed out everywhere and lose access to every workspace until reinstated.</p>}
-                        {action.kind === 'delete' && (
-                          <p className="help danger-help">
-                            This can't be undone. Their login, cards, card photos, notes, recordings and share offers are deleted.
-                            Team workspaces they own that other members still use pass to you. To keep their data, use Cancel access instead.
-                          </p>
-                        )}
                       </td>
                     </tr>
                   )}
@@ -208,6 +207,75 @@ function Accounts({ profiles, reload, toast }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+/** Accounts moved here by Delete account: can't sign in, records kept until deleted permanently. */
+function DeletedUsers({ profiles, reload, toast }) {
+  const { api } = useApp();
+  const [purging, setPurging] = useState(null); // profile id
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = async (kind, p, extra) => {
+    setBusy(true);
+    try {
+      await api.adminUserAction(kind, p.id, extra);
+      toast(kind === 'reinstate' ? `@${p.username} reinstated with all their records` : `@${p.username} deleted permanently`);
+      setPurging(null);
+      setTyped('');
+      await reload();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!profiles.length) {
+    return <p className="muted">No deleted users. When you delete an account it moves here, with its cards, notes and recordings kept, so you can reinstate it.</p>;
+  }
+  return (
+    <>
+      <p className="help">These people can't sign in. Their cards, photos, notes and recordings are kept as they were. Reinstate brings the account and everything back.</p>
+      <ul className="deleted-users">
+        {profiles.map((p) => (
+          <li key={p.id} className="deleted-user">
+            <div className="deleted-user-head">
+              <span>
+                <strong>{p.full_name || '—'}</strong> <span className="mono small muted">@{p.username}</span>
+                {p.is_super_admin && <> <Pill tone="accent" icon="shield">Super admin</Pill></>}
+              </span>
+              <span className="small muted">Deleted {p.deleted_at ? formatDate(p.deleted_at) : ''}</span>
+            </div>
+            <div className="deleted-user-actions">
+              <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => run('reinstate', p)}>
+                <Icon name="refresh" size={14} /> Reinstate
+              </button>
+              <button type="button" className="btn btn-danger-ghost btn-sm" disabled={busy}
+                aria-expanded={purging === p.id}
+                onClick={() => { setPurging(purging === p.id ? null : p.id); setTyped(''); }}>
+                <Icon name="trash" size={14} /> Delete permanently
+              </button>
+            </div>
+            {purging === p.id && (
+              <form className="inline-form" onSubmit={(e) => { e.preventDefault(); if (typed.trim().toLowerCase() === p.username) run('purge', p, { confirm_username: typed.trim() }); }}>
+                <div className="field grow">
+                  <label htmlFor={`purge-${p.id}`}>Type {p.username} to erase this account</label>
+                  <input id={`purge-${p.id}`} autoFocus type="text" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+                </div>
+                <button type="submit" className="btn btn-danger" disabled={busy || typed.trim().toLowerCase() !== p.username}>Erase for good</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setPurging(null)}>Back</button>
+                <p className="help danger-help">
+                  This can't be undone. Their login, cards, card photos, notes, recordings and share offers are erased.
+                  Team workspaces they own that other members still use pass to you.
+                </p>
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

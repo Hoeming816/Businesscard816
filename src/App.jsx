@@ -76,7 +76,7 @@ export default function App() {
         const p = await api.getProfile(user.id);
         if (!alive) return;
         if (!p) throw new Error('Your profile could not be loaded.');
-        if (p.status === 'suspended') {
+        if (p.status !== 'active') {
           setSuspended({ reason: p.suspended_reason || '' });
           await api.signOut();
           return;

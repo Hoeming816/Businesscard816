@@ -474,7 +474,7 @@ export async function adminListProfiles() {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, status, suspended_reason, is_super_admin, features, created_at')
+      .select('*')
       .order('created_at', { ascending: false })
       .range(from, from + PAGE - 1);
     fail(error);
@@ -484,7 +484,7 @@ export async function adminListProfiles() {
   return out;
 }
 
-/** action: 'suspend' | 'reinstate' | 'reset_password' | 'delete'; extra: { reason?, password?, confirm_username? } */
+/** action: 'suspend' | 'reinstate' | 'reset_password' | 'delete' (to Deleted users) | 'purge'; extra: { reason?, password?, confirm_username? } */
 export async function adminUserAction(action, userId, extra = {}) {
   await invoke('admin-users', { action, user_id: userId, ...extra });
 }
