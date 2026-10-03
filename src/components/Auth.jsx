@@ -71,7 +71,7 @@ export default function AuthScreen({ onSuspended }) {
         </div>
       </div>
       <div className="auth-panel">
-        <Logo byline />
+        <Logo byline tagline />
         <h1 className="auth-title">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h1>
         <p className="muted auth-sub">
           {mode === 'signin'

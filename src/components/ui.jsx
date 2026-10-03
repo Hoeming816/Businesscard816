@@ -66,20 +66,31 @@ export function Icon({ name, size = 18, className = '', strokeWidth = 1.8, title
   );
 }
 
-export function Logo({ compact = false, byline = false }) {
+export function Logo({ compact = false, byline = false, tagline = false }) {
+  const id = useId().replace(/:/g, '');
   return (
     <span className="logo">
       <svg className="logo-mark" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
-        <rect width="64" height="64" rx="15" fill="#2b55e0" />
-        <rect x="17" y="9" width="36" height="23" rx="4.5" fill="#fff" opacity=".3" transform="rotate(-9 35 20.5)" />
-        <rect x="9" y="20" width="42" height="28" rx="5" fill="#fff" />
-        <path d="M21 41.5 V 26.5 L 36 41.5 V 26.5" fill="none" stroke="#2b55e0" strokeWidth="4.8" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="44.5" cy="41.5" r="3" fill="#7d99ff" />
+        <defs>
+          <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#0d2558" /><stop offset="1" stopColor="#061230" />
+          </linearGradient>
+          <linearGradient id={`${id}b`} x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#2aa4ff" /><stop offset="1" stopColor="#1a63f0" />
+          </linearGradient>
+          <linearGradient id={`${id}g`} x1="0" y1="14" x2="0" y2="44" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#2ee6c4" /><stop offset="1" stopColor="#1c8ce6" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="15" fill={`url(#${id}t)`} />
+        <path d="M45 19 V 42" stroke={`url(#${id}g)`} strokeWidth="12" strokeLinecap="round" />
+        <path d="M19 45 V 19 L 45 45" fill="none" stroke={`url(#${id}b)`} strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       {!compact && (
         <span className="logo-text">
           <span className="logo-word">Nomi<span className="logo-flow">qo</span></span>
           {byline && <span className="logo-by">by Aspencom</span>}
+          {tagline && <span className="logo-tagline">Scan. Organize. Connect.</span>}
         </span>
       )}
     </span>
