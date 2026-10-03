@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
 import { toDraft, fromDraft, diff } from '../contactModel.js';
 import { followUpState, todayISO } from '../filters.js';
-import { canEditContact, canDeleteContact, canToggleVisibility, canTakePrivate, canAddInteraction } from '../perms.js';
+import { canEditContact, canDeleteContact, canAddInteraction } from '../perms.js';
 import ContactForm from './ContactForm.jsx';
 import Timeline from './Timeline.jsx';
 import SharePanel from './SharePanel.jsx';
 import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, formatDate, initials } from './ui.jsx';
 
 export default function ContactDetail({ contact, onClose }) {
-  const { api, uid, role, contacts, upsertContact, removeContact, memberName, toast, ensureSigned, signed } = useApp();
+  const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed } = useApp();
   const [tab, setTab] = useState('details');
   const [side, setSide] = useState('front');
   const [base, setBase] = useState(() => toDraft(contact)); // what editing started from
@@ -181,14 +181,10 @@ export default function ContactDetail({ contact, onClose }) {
             <dl className="meta">
               <div><dt>Last contacted</dt><dd>{contact.last_contacted_on ? formatDate(contact.last_contacted_on) : 'Never'}</dd></div>
               <div><dt>Next follow-up</dt><dd>{contact.next_follow_up_on ? formatDate(contact.next_follow_up_on) : 'None'}</dd></div>
-              <div><dt>Added</dt><dd>{formatDate(contact.created_at)} by {contact.created_by === uid ? 'you' : memberName(contact.created_by)}</dd></div>
+              <div><dt>Added</dt><dd>{formatDate(contact.created_at)}</dd></div>
               <div>
                 <dt>Visibility</dt>
-                <dd>
-                  {contact.is_private
-                    ? <span className="vis"><Icon name="lock" size={14} /> Private: only you can see it</span>
-                    : <span className="vis"><Icon name="users" size={14} /> Shared with the workspace</span>}
-                </dd>
+                <dd><span className="vis"><Icon name="lock" size={14} /> Only you can see it</span></dd>
               </div>
             </dl>
 
@@ -199,27 +195,10 @@ export default function ContactDetail({ contact, onClose }) {
                   <Icon name="check" size={16} /> {contact.last_contacted_on === today ? 'Contacted today' : 'Log contact today'}
                 </button>
               )}
-              {role && (
+              {editable && (
                 <button type="button" className={`btn btn-outline ${sharing ? 'has-active' : ''}`} aria-expanded={sharing} onClick={() => setSharing((v) => !v)}>
                   <Icon name="send" size={16} /> Share
                 </button>
-              )}
-              {canToggleVisibility(contact, role, uid) && (
-                <button type="button" className="btn btn-outline" disabled={busy}
-                  onClick={() => patch({ is_private: !contact.is_private }, contact.is_private ? 'Card shared with the workspace' : 'Card is now private')}>
-                  <Icon name={contact.is_private ? 'unlock' : 'lock'} size={16} /> {contact.is_private ? 'Share with workspace' : 'Make private'}
-                </button>
-              )}
-              {canTakePrivate(contact, role, uid) && (
-                <ConfirmButton
-                  className="btn btn-outline"
-                  icon="lock"
-                  confirmLabel="Take private"
-                  message={`${memberName(contact.created_by)} will lose access to this card, its photos and notes. You become its owner.`}
-                  onConfirm={() => patch({ is_private: true, created_by: uid }, 'Card taken private. You now own it.')}
-                >
-                  Take private
-                </ConfirmButton>
               )}
               {canDeleteContact(contact, role, uid) && (
                 <ConfirmButton icon="trash" confirmLabel="Delete card" message="Delete this card, its photos, notes and recordings?" onConfirm={del}>

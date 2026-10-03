@@ -59,7 +59,7 @@ export default function Contacts() {
     const csv = toCsv(filtered, { uid, ownerName: memberName });
     const slug = (workspace?.name || 'contacts').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     downloadText(`cardfile-${slug}-${today}.csv`, csv);
-    toast(`Exported ${filtered.filter((c) => !c.is_private || c.created_by === uid).length} contacts`);
+    toast(`Exported ${filtered.filter((c) => c.created_by === uid).length} contacts`);
   };
 
   // Render groups up to `limit` rows.
@@ -201,7 +201,6 @@ function ContactRow({ c, today, uid, thumb, onOpen }) {
           {c.priority && <Pill tone={c.priority === 'High' ? 'hot' : 'neutral'}>{c.priority}</Pill>}
           {fu === 'overdue' && <Pill tone="danger" icon="clock">Follow-up overdue</Pill>}
           {fu === 'today' && <Pill tone="warn" icon="clock">Follow-up today</Pill>}
-          {c.is_private && <Pill tone="private" icon="lock">Private</Pill>}
         </span>
       </span>
       <span className="row-contact mono">

@@ -123,14 +123,14 @@ export default function Scan() {
     setSaveError('');
   };
 
-  const save = async (visibility, force = false) => {
+  const save = async (force = false) => {
     setSaveError('');
     if (!hasContent) {
       setSaveError('Add at least a name, company, email or phone before saving.');
       return;
     }
     if (dups.length && !force) {
-      setPendingSave(visibility);
+      setPendingSave(true);
       return;
     }
     setPendingSave(null);
@@ -141,7 +141,7 @@ export default function Scan() {
         ...row,
         workspace_id: workspace.id,
         created_by: uid,
-        is_private: visibility === 'private',
+        is_private: true,
       });
     } catch (e) {
       setSaveError(e.message);
@@ -171,7 +171,7 @@ export default function Scan() {
     if (failures.length) {
       toast(`Contact saved, but ${failures.join('; ')}`, 'error');
     } else {
-      toast(`${contact.full_name || 'Contact'} saved ${visibility === 'private' ? 'as private' : 'to ' + workspace.name}`);
+      toast(`${contact.full_name || 'Contact'} saved to your cards`);
     }
     reset();
   };
@@ -230,7 +230,7 @@ export default function Scan() {
             <div className="notice notice-warn confirm-dup" role="alertdialog" aria-label="Duplicate warning">
               <p>This looks like a card you already have. Save it anyway?</p>
               <div className="row-actions">
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => save(pendingSave, true)}>Save anyway</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => save(true)}>Save anyway</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPendingSave(null)}>Cancel</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setView('contacts')}>Go to contacts</button>
               </div>
@@ -238,11 +238,8 @@ export default function Scan() {
           )}
           <div className="save-bar sticky is-dirty">
             <button type="button" className="btn btn-ghost" onClick={reset} disabled={saving}>Clear</button>
-            <button type="button" className="btn btn-outline" onClick={() => save('private')} disabled={saving}>
-              <Icon name="lock" size={16} /> Save as private
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => save('shared')} disabled={saving}>
-              {saving ? 'Saving…' : <><Icon name="users" size={16} /> Save to workspace</>}
+            <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>
+              {saving ? 'Saving…' : <><Icon name="check" size={16} /> Save card</>}
             </button>
           </div>
         </section>

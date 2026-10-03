@@ -53,52 +53,57 @@ select pg_temp.ok((select role from public.add_member(:'ws', 'carol', 'viewer'))
 select pg_temp.fails($$select public.add_member('$$ || :'ws' || $$', 'nobody', 'viewer')$$, 'unknown username rejected');
 
 insert into public.contacts (id, workspace_id, full_name, company)
-values ('10000000-0000-0000-0000-000000000001', :'ws', 'Shared By Alice', 'Acme');
+values ('10000000-0000-0000-0000-000000000001', :'ws', 'Alice Card', 'Acme');
 insert into public.contacts (id, workspace_id, full_name, is_private)
 values ('10000000-0000-0000-0000-000000000002', :'ws', 'Alice Private', true);
+select pg_temp.ok((select bool_and(is_private) from public.contacts), 'new cards are always the owner''s own');
+select pg_temp.fails($$insert into public.contacts (workspace_id, full_name, is_private) values ('$$ || :'ws' || $$', 'open', false)$$, 'a card cannot be opened to the workspace');
 
 -- ---------------------------------------------------------------- bob (editor)
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
-select pg_temp.ok((select count(*) from public.contacts) = 1, 'editor sees shared card, not alice''s private card');
+select pg_temp.ok((select count(*) from public.contacts) = 0, 'editor cannot see other members'' cards');
 insert into public.contacts (id, workspace_id, full_name)
-values ('10000000-0000-0000-0000-000000000003', :'ws', 'Shared By Bob');
+values ('10000000-0000-0000-0000-000000000003', :'ws', 'Bob Card');
 insert into public.contacts (id, workspace_id, full_name, is_private)
 values ('10000000-0000-0000-0000-000000000004', :'ws', 'Bob Private', true);
-update public.contacts set notes = 'edited by bob' where id = '10000000-0000-0000-0000-000000000001';
-select pg_temp.ok((select notes from public.contacts where id = '10000000-0000-0000-0000-000000000001') = 'edited by bob', 'editor edits shared card');
-select pg_temp.fails($$delete from public.contacts where id = '10000000-0000-0000-0000-000000000001'$$, 'editor cannot delete another person''s card');
-select pg_temp.fails($$update public.contacts set notes = 'x' where id = '10000000-0000-0000-0000-000000000002'$$, 'editor cannot touch alice''s private card');
+select pg_temp.ok((select count(*) from public.contacts) = 2, 'editor sees own cards');
+update public.contacts set notes = 'edited by bob' where id = '10000000-0000-0000-0000-000000000003';
+select pg_temp.ok((select notes from public.contacts where id = '10000000-0000-0000-0000-000000000003') = 'edited by bob', 'editor edits own card');
+select pg_temp.fails($$update public.contacts set notes = 'x' where id = '10000000-0000-0000-0000-000000000001'$$, 'editor cannot edit another member''s card');
+select pg_temp.fails($$delete from public.contacts where id = '10000000-0000-0000-0000-000000000001'$$, 'editor cannot delete another member''s card');
+select pg_temp.fails($$update public.contacts set created_by = '00000000-0000-0000-0000-00000000000a' where id = '10000000-0000-0000-0000-000000000003'$$, 'a card cannot be handed to another owner');
+select pg_temp.fails($$update public.contacts set is_private = false where id = '10000000-0000-0000-0000-000000000003'$$, 'owner cannot open a card to the workspace');
 select pg_temp.fails($$update public.workspace_members set role = 'admin' where user_id = auth.uid() and workspace_id = '$$ || :'ws' || $$'$$, 'editor cannot self-promote');
 select pg_temp.fails($$update public.profiles set is_super_admin = true where id = auth.uid()$$, 'cannot make self super admin');
 select pg_temp.fails($$update public.profiles set username = 'bobby' where id = auth.uid()$$, 'cannot change own username');
 update public.profiles set full_name = 'Bob E.' where id = auth.uid();
 select pg_temp.ok((select full_name from public.profiles where id = auth.uid()) = 'Bob E.', 'can change own full name');
-select pg_temp.fails($$update public.contacts set is_private = true, created_by = auth.uid() where id = '10000000-0000-0000-0000-000000000001'$$, 'editor cannot take another person''s card private');
 
 insert into public.interactions (id, contact_id, workspace_id, kind, occurred_on, title)
-values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', :'ws_dave', 'Meeting', '2026-09-01', 'Kickoff');
+values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', :'ws_dave', 'Meeting', '2026-09-01', 'Kickoff');
 select pg_temp.ok((select workspace_id from public.interactions where id = '20000000-0000-0000-0000-000000000001') = :'ws', 'interaction workspace synced from contact');
-select pg_temp.ok((select last_contacted_on from public.contacts where id = '10000000-0000-0000-0000-000000000001') = '2026-09-01', 'meeting bumps last contacted');
+select pg_temp.ok((select last_contacted_on from public.contacts where id = '10000000-0000-0000-0000-000000000003') = '2026-09-01', 'meeting bumps last contacted');
 insert into public.interactions (contact_id, workspace_id, kind, occurred_on, title)
-values ('10000000-0000-0000-0000-000000000001', :'ws', 'Note', '2026-09-20', 'Just a note');
-select pg_temp.ok((select last_contacted_on from public.contacts where id = '10000000-0000-0000-0000-000000000001') = '2026-09-01', 'note does not bump last contacted');
+values ('10000000-0000-0000-0000-000000000003', :'ws', 'Note', '2026-09-20', 'Just a note');
+select pg_temp.ok((select last_contacted_on from public.contacts where id = '10000000-0000-0000-0000-000000000003') = '2026-09-01', 'note does not bump last contacted');
 insert into public.interactions (contact_id, workspace_id, kind, occurred_on, title)
-values ('10000000-0000-0000-0000-000000000001', :'ws', 'Call', '2026-08-01', 'Older call');
-select pg_temp.ok((select last_contacted_on from public.contacts where id = '10000000-0000-0000-0000-000000000001') = '2026-09-01', 'older entry does not move last contacted back');
+values ('10000000-0000-0000-0000-000000000003', :'ws', 'Call', '2026-08-01', 'Older call');
+select pg_temp.ok((select last_contacted_on from public.contacts where id = '10000000-0000-0000-0000-000000000003') = '2026-09-01', 'older entry does not move last contacted back');
 insert into public.interactions (contact_id, workspace_id, kind, title)
 values ('10000000-0000-0000-0000-000000000004', :'ws', 'Call', 'Private call');
-select pg_temp.fails($$insert into public.interactions (contact_id, workspace_id, title) values ('10000000-0000-0000-0000-000000000002', '$$ || :'ws' || $$', 'sneaky')$$, 'cannot log on someone else''s private card');
+select pg_temp.fails($$insert into public.interactions (contact_id, workspace_id, title) values ('10000000-0000-0000-0000-000000000001', '$$ || :'ws' || $$', 'sneaky')$$, 'cannot log on another member''s card');
 
 insert into storage.objects (bucket_id, name) values ('cards', :'ws' || '/10000000-0000-0000-0000-000000000003/front-1.jpg');
-select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('cards', '$$ || :'ws' || $$/10000000-0000-0000-0000-000000000002/front-1.jpg')$$, 'cannot upload to someone else''s private card');
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('cards', '$$ || :'ws' || $$/10000000-0000-0000-0000-000000000001/front-1.jpg')$$, 'cannot upload to another member''s card');
 select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('cards', '$$ || :'ws_dave' || $$/10000000-0000-0000-0000-000000000003/front-1.jpg')$$, 'path workspace must match card workspace');
 insert into storage.objects (bucket_id, name) values ('recordings', :'ws' || '/10000000-0000-0000-0000-000000000004/rec.webm');
+select pg_temp.ok((select count(*) from storage.objects) = 2, 'owner sees own files');
 
 -- ---------------------------------------------------------------- carol (viewer)
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
-select pg_temp.ok((select count(*) from public.contacts) = 2, 'viewer sees both shared cards only');
-select pg_temp.ok((select count(*) from public.interactions) = 3, 'viewer sees entries on shared cards only');
-select pg_temp.ok((select count(*) from storage.objects) = 1, 'viewer sees shared photo, not private recording');
+select pg_temp.ok((select count(*) from public.contacts) = 0, 'viewer sees no one else''s cards');
+select pg_temp.ok((select count(*) from public.interactions) = 0, 'viewer sees no one else''s entries');
+select pg_temp.ok((select count(*) from storage.objects) = 0, 'viewer sees no one else''s files');
 select pg_temp.fails($$insert into public.contacts (workspace_id, full_name) values ('$$ || :'ws' || $$', 'nope')$$, 'viewer cannot add cards');
 select pg_temp.fails($$update public.contacts set notes = 'viewer' where id = '10000000-0000-0000-0000-000000000001'$$, 'viewer cannot edit cards');
 select pg_temp.fails($$delete from public.contacts where id = '10000000-0000-0000-0000-000000000003'$$, 'viewer cannot delete cards');
@@ -117,19 +122,21 @@ select pg_temp.fails($$update public.workspaces set status = 'suspended' where i
 insert into public.workspaces (name, owner_id) values ('Dave Second', auth.uid());
 select pg_temp.ok((select count(*) from public.workspaces) = 2, 'user creates additional workspace and is admin of it');
 
--- ---------------------------------------------------------------- owner protection
+-- ---------------------------------------------------------------- admins
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok((select count(*) from public.contacts) = 2, 'workspace owner sees only own cards');
+select pg_temp.ok((select count(*) from public.interactions) = 0, 'workspace owner cannot read members'' notes');
+select pg_temp.ok((select count(*) from storage.objects) = 0, 'workspace owner cannot read members'' files');
+select pg_temp.fails($$delete from public.contacts where id = '10000000-0000-0000-0000-000000000003'$$, 'admin cannot delete a member''s card');
+select pg_temp.fails($$update public.contacts set created_by = auth.uid() where id = '10000000-0000-0000-0000-000000000003'$$, 'admin cannot take over a member''s card');
+select pg_temp.ok((select count(*) from public.workspace_members where workspace_id = :'ws') = 3, 'admin still manages the team');
 select public.add_member(:'ws', 'bob', 'admin');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok((select count(*) from public.contacts) = 2, 'second admin still sees only own cards');
 select pg_temp.fails($$update public.workspace_members set role = 'viewer' where user_id = '00000000-0000-0000-0000-00000000000a'$$, 'other admin cannot demote owner');
 select pg_temp.fails($$delete from public.workspace_members where user_id = '00000000-0000-0000-0000-00000000000a' and workspace_id = '$$ || :'ws' || $$'$$, 'other admin cannot remove owner');
 select pg_temp.fails($$update public.workspaces set owner_id = auth.uid() where id = '$$ || :'ws' || $$'$$, 'admin cannot take workspace ownership');
--- admin takes alice's shared card private
-update public.contacts set is_private = true, created_by = auth.uid() where id = '10000000-0000-0000-0000-000000000001';
-select pg_temp.ok((select created_by from public.contacts where id = '10000000-0000-0000-0000-000000000001') = auth.uid(), 'admin takes shared card private and owns it');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
-select pg_temp.ok(not exists (select 1 from public.contacts where id = '10000000-0000-0000-0000-000000000001'), 'original creator loses access after take-private');
-select pg_temp.ok(not exists (select 1 from public.interactions where contact_id = '10000000-0000-0000-0000-000000000001'), 'entries follow the card into private');
 select pg_temp.fails($$delete from public.workspace_members where user_id = auth.uid() and workspace_id = '$$ || :'ws' || $$'$$, 'owner cannot leave own workspace');
 update public.workspace_members set role = 'editor' where user_id = '00000000-0000-0000-0000-00000000000b' and workspace_id = :'ws';
 
@@ -213,7 +220,7 @@ select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 select pg_temp.ok((select status from public.card_shares where id = '30000000-0000-0000-0000-000000000001') = 'accepted', 'sender sees it was accepted');
 select pg_temp.ok(not exists (select 1 from public.contacts where id = :'copy'), 'sender cannot see the recipient''s private copy');
-select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b')$$, 'cannot share a card you cannot see');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000b')$$, 'cannot share a card you cannot see');
 insert into public.contacts (id, workspace_id, full_name, company)
 values ('10000000-0000-0000-0000-000000000009', :'ws', 'Team Card', 'Acme');
 insert into public.card_shares (id, workspace_id, contact_id, recipient_id)

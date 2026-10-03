@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  FILTER_CATEGORIES, CATEGORY_BY_KEY, VISIBILITY_OPTIONS, categoryOptions, norm, emptyFilters, activeFilterCount,
+  FILTER_CATEGORIES, CATEGORY_BY_KEY, categoryOptions, norm, emptyFilters, activeFilterCount,
 } from '../filters.js';
 import { load, save } from '../storage.js';
 import { Icon } from './ui.jsx';
@@ -72,21 +72,6 @@ export default function FilterRail({ contacts, filters, setFilters, counts, draw
       </div>
 
       <div className="rail-body">
-        <fieldset className="seg" aria-label="Visibility">
-          <legend className="sr-only">Visibility</legend>
-          {VISIBILITY_OPTIONS.map((o) => (
-            <label key={o.value} className={`seg-item ${filters.visibility === o.value ? 'is-active' : ''}`}>
-              <input
-                type="radio"
-                name="visibility"
-                value={o.value}
-                checked={filters.visibility === o.value}
-                onChange={() => setFilters((f) => ({ ...f, visibility: o.value }))}
-              />
-              {o.label}
-            </label>
-          ))}
-        </fieldset>
 
         {SECTIONS.map((s) => {
           const active = s.key === 'location'

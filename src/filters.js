@@ -227,7 +227,7 @@ export function normalizeFilters(saved) {
   if (!saved || typeof saved !== 'object') return base;
   const out = { ...base };
   if (typeof saved.q === 'string') out.q = saved.q;
-  if (VISIBILITY_OPTIONS.some((o) => o.value === saved.visibility)) out.visibility = saved.visibility;
+  // Visibility is no longer offered (every card is the owner's own), so an old saved choice is dropped.
   if (typeof saved.dateFrom === 'string') out.dateFrom = saved.dateFrom;
   if (typeof saved.dateTo === 'string') out.dateTo = saved.dateTo;
   if (GROUP_BY_OPTIONS.some((o) => o.value === saved.groupBy)) out.groupBy = saved.groupBy;

@@ -49,7 +49,7 @@ function roleIn(ws) {
   const w = db.workspaces.find((x) => x.id === ws);
   return m && w && w.status === 'active' ? m.role : null;
 }
-const visible = (c) => roleIn(c.workspace_id) && (!c.is_private || c.created_by === uid());
+const visible = (c) => roleIn(c.workspace_id) && c.created_by === uid(); // owner-only, as in 0004
 const profile = (id) => db.profiles.find((p) => p.id === id);
 
 export const usernameToEmail = (u) => `${u}@demo.cardfile.app`;
@@ -191,8 +191,8 @@ export async function insertContact(row) {
   const r = roleIn(row.workspace_id);
   if (r !== 'admin' && r !== 'editor') deny();
   const c = {
-    emails: [], phones: [], opportunities: [], tags: [], is_private: false,
-    ...clone(row), id: newId('c'), created_by: uid(), created_at: now(), updated_at: now(),
+    emails: [], phones: [], opportunities: [], tags: [],
+    ...clone(row), is_private: true, id: newId('c'), created_by: uid(), created_at: now(), updated_at: now(),
   };
   db.contacts.push(c);
   return clone(c);
@@ -201,11 +201,8 @@ export async function updateContact(id, patch) {
   await tick();
   const c = db.contacts.find((x) => x.id === id);
   if (!c || !canEditContact(c, roleIn(c.workspace_id), uid())) deny();
-  if (patch.created_by && patch.created_by !== c.created_by) {
-    if (!(roleIn(c.workspace_id) === 'admin' && !c.is_private && patch.is_private && patch.created_by === uid())) {
-      deny('card ownership can only change when an admin takes a shared card private');
-    }
-  }
+  if (patch.created_by && patch.created_by !== c.created_by) deny('a card cannot change owner');
+  if (patch.is_private === false) deny('cards are only visible to their owner');
   Object.assign(c, clone(patch), { updated_at: now() });
   return visible(c) ? clone(c) : null;
 }
