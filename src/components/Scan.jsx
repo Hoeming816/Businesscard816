@@ -37,13 +37,15 @@ export default function Scan() {
     set(img);
   };
 
-  const startCrop = async (file, side) => {
+  // autoRead: run Read card straight after cropping (new card from the Scan button,
+  // or a front photo on an empty form).
+  const startCrop = async (file, side, autoRead = false) => {
     setLoadingSide(side);
     try {
       const canvas = await loadPhoto(file);
       if (!alive.current) return;
       const found = findCard(canvas);
-      setCrop({ side, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found });
+      setCrop({ side, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found, autoRead });
       setReadError('');
     } catch (e) {
       toast(e.message || 'Could not use that image.', 'error');
@@ -59,6 +61,7 @@ export default function Scan() {
       if (!alive.current) return;
       setSide(crop.side, img);
       setCrop(null);
+      if (crop.side === 'Front' && crop.autoRead) read(img);
     } catch (e) {
       toast(e.message || 'Could not crop that photo.', 'error');
     } finally {
@@ -66,12 +69,15 @@ export default function Scan() {
     }
   };
 
-  // A photo taken from the Scan tab button goes to the first empty side.
+  // A photo taken with the Scan tab button always starts a new card.
   useEffect(() => {
     if (!quickShot) return;
     const { file } = quickShot;
     clearQuickShot();
-    startCrop(file, !front ? 'Front' : !back ? 'Back' : 'Front');
+    const dirty = front || back || hasContent;
+    if (dirty && !window.confirm('Start a new card with this photo? The card you were working on has not been saved and will be cleared.')) return;
+    if (dirty) reset();
+    startCrop(file, 'Front', true);
   }, [quickShot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
@@ -89,12 +95,12 @@ export default function Scan() {
     );
   }
 
-  const read = async () => {
-    if (!front) return;
+  const read = async (frontImg = front, backImg = back) => {
+    if (!frontImg) return;
     setReading(true);
     setReadError('');
     try {
-      const card = await api.scanCard(front.base64, back?.base64 || null);
+      const card = await api.scanCard(frontImg.base64, backImg?.base64 || null);
       setDraft((d) => draftFromScan(card, d));
       setReadDone(true);
       toast('Card read. Check the details before saving.');
@@ -106,6 +112,8 @@ export default function Scan() {
   };
 
   const reset = () => {
+    if (front?.url) URL.revokeObjectURL(front.url);
+    if (back?.url) URL.revokeObjectURL(back.url);
     setFront(null);
     setBack(null);
     setDraft(blankDraft());
@@ -190,9 +198,9 @@ export default function Scan() {
 
       <div className="scan-grid">
         <section className="scan-photos" aria-label="Card photos">
-          <PhotoSlot label="Front" required busy={loadingSide === 'Front'} value={front} onPick={(f) => startCrop(f, 'Front')} onChange={setFront} />
+          <PhotoSlot label="Front" required busy={loadingSide === 'Front'} value={front} onPick={(f) => startCrop(f, 'Front', !hasContent)} onChange={setFront} />
           <PhotoSlot label="Back" busy={loadingSide === 'Back'} value={back} onPick={(f) => startCrop(f, 'Back')} onChange={setBack} />
-          <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={read}>
+          <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={() => read()}>
             {reading ? <><Spinner /> Reading card…</> : <><Icon name="sparkles" size={18} /> {readDone ? 'Read card again' : 'Read card'}</>}
           </button>
           {!front && <p className="help center">A front photo is needed for AI reading.</p>}
