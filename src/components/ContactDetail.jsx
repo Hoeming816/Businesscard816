@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { toDraft, fromDraft, diff } from '../contactModel.js';
 import { followUpState, todayISO } from '../filters.js';
@@ -6,7 +6,9 @@ import { canEditContact, canDeleteContact, canAddInteraction } from '../perms.js
 import ContactForm from './ContactForm.jsx';
 import Timeline from './Timeline.jsx';
 import SharePanel from './SharePanel.jsx';
-import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, formatDate, initials } from './ui.jsx';
+import CardCropper from './CardCropper.jsx';
+import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
+import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, formatDate, initials } from './ui.jsx';
 
 export default function ContactDetail({ contact, onClose }) {
   const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed } = useApp();
@@ -17,6 +19,11 @@ export default function ContactDetail({ contact, onClose }) {
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // Retaking a card photo: camera -> crop -> replace. { side, canvas, quad, detected }
+  const retakeInput = useRef(null);
+  const retakeSide = useRef('front');
+  const [retake, setRetake] = useState(null);
+  const [retakeBusy, setRetakeBusy] = useState(''); // '' | 'loading' | 'saving'
 
   const editable = canEditContact(contact, role, uid);
   // Only the fields the user changed, so updates made elsewhere (e.g. "Log
@@ -90,6 +97,46 @@ export default function ContactDetail({ contact, onClose }) {
     }
   };
 
+  const pickRetake = (which) => {
+    retakeSide.current = which;
+    retakeInput.current?.click();
+  };
+
+  const startRetake = async (file) => {
+    setRetakeBusy('loading');
+    try {
+      const canvas = await loadPhoto(file);
+      const found = findCard(canvas);
+      setRetake({ side: retakeSide.current, canvas, quad: found || fallbackQuad(canvas.width, canvas.height), detected: !!found });
+    } catch (e) {
+      toast(e.message || 'Could not use that image.', 'error');
+    } finally {
+      setRetakeBusy('');
+    }
+  };
+
+  // Replace the photo only; the card details are left as they are.
+  const finishRetake = async (quad) => {
+    const which = retake.side;
+    setRetakeBusy('saving');
+    try {
+      const img = quad ? await cropToCard(retake.canvas, quad) : await wholePhoto(retake.canvas);
+      const old = contact[`${which}_path`];
+      const path = await api.uploadCardPhoto(contact.workspace_id, contact.id, which, img.blob);
+      const updated = await api.updateContact(contact.id, { [`${which}_path`]: path });
+      if (img.url) URL.revokeObjectURL(img.url);
+      if (old) api.removeStorageObjects('cards', [old]).catch(() => {});
+      if (updated) upsertContact(updated);
+      setSide(which);
+      setRetake(null);
+      toast(old ? `${which === 'back' ? 'Back' : 'Front'} photo replaced` : 'Back photo added');
+    } catch (e) {
+      toast(e.message || 'Could not replace the photo.', 'error');
+    } finally {
+      setRetakeBusy('');
+    }
+  };
+
   const close = () => {
     if (dirty && !window.confirm('Discard unsaved changes to this contact?')) return;
     onClose();
@@ -130,6 +177,45 @@ export default function ContactDetail({ contact, onClose }) {
               </div>
             )}
           </div>
+          {editable && (
+            <div className="photo-actions">
+              <button type="button" className="btn btn-outline btn-sm" disabled={!!retakeBusy} onClick={() => pickRetake(side === 'back' && contact.back_path ? 'back' : 'front')}>
+                {retakeBusy === 'loading' ? <Spinner /> : <Icon name="camera" size={15} />}{' '}
+                {(side === 'back' && contact.back_path) ? 'Retake back photo' : contact.front_path ? 'Retake front photo' : 'Add card photo'}
+              </button>
+              {contact.front_path && !contact.back_path && (
+                <button type="button" className="btn btn-ghost btn-sm" disabled={!!retakeBusy} onClick={() => pickRetake('back')}>
+                  <Icon name="plus" size={15} /> Add back photo
+                </button>
+              )}
+              <input
+                ref={retakeInput}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  const f = e.target.files && e.target.files[0];
+                  e.target.value = '';
+                  if (f) startRetake(f);
+                }}
+              />
+            </div>
+          )}
+          {retake && (
+            <CardCropper
+              side={retake.side === 'back' ? 'Back' : 'Front'}
+              canvas={retake.canvas}
+              initialQuad={retake.quad}
+              detected={retake.detected}
+              busy={retakeBusy === 'saving'}
+              onCrop={finishRetake}
+              onSkip={() => finishRetake(null)}
+              onCancel={() => setRetake(null)}
+            />
+          )}
 
           <div className="facts">
             <h2 id={titleId} className="detail-name">{contact.full_name || <em className="muted">No name</em>}</h2>

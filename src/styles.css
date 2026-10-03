@@ -1002,3 +1002,4 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .incoming-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: none; }
 .incoming-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 .incoming-more { margin: 10px 0 0; text-align: right; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

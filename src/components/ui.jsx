@@ -104,6 +104,9 @@ export function Avatar({ name, size = 32 }) {
 // Modal dialog: role=dialog, aria-modal, Escape to close, focus handling
 // ---------------------------------------------------------------------------
 
+// Open modals, innermost last: only the top one answers Escape and traps Tab.
+const modalStack = [];
+
 export function Modal({ title, labelledBy, onClose, children, className = '', wide = false }) {
   const ref = useRef(null);
   const closeRef = useRef(onClose);
@@ -114,7 +117,10 @@ export function Modal({ title, labelledBy, onClose, children, className = '', wi
     const el = ref.current;
     const first = el && el.querySelector('[data-autofocus]');
     (first || el)?.focus({ preventScroll: true });
+    const token = {};
+    modalStack.push(token);
     const onKey = (e) => {
+      if (modalStack[modalStack.length - 1] !== token) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         closeRef.current();
@@ -132,7 +138,8 @@ export function Modal({ title, labelledBy, onClose, children, className = '', wi
     document.body.classList.add('modal-open');
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.classList.remove('modal-open');
+      modalStack.splice(modalStack.indexOf(token), 1);
+      if (!modalStack.length) document.body.classList.remove('modal-open');
       if (prev && prev.focus) prev.focus({ preventScroll: true });
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
