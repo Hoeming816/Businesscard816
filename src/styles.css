@@ -1137,3 +1137,11 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .me-row input { flex: 1; min-width: 0; }
 .me-topic, .me-action { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
 .me-action-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+.meeting-panel > .fm-section { margin-top: 16px; }
+.follow-up { list-style: none; margin: 0; padding: 0 !important; display: grid; gap: 8px; }
+.follow-up li { display: flex; gap: 10px; align-items: flex-start; }
+.fu-icon { flex: none; margin-top: 2px; }
+.fu-ok { color: var(--ok); } .fu-danger { color: var(--danger); } .fu-warn { color: var(--warn); }
+.followups { display: grid; gap: 12px; }
+.fu-from { justify-self: start; }
+.view-switch { margin-top: 8px; }

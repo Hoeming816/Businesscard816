@@ -87,7 +87,12 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
       <div className="meeting-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'mt-summary' && (m?.quick_summary.length ? <Bullets items={m.quick_summary} /> : <NotYet m={m} />)}
         {tab === 'mt-minutes' && (m ? <FormalMinutes i={i} m={m} contact={contact} /> : <NotYet m={m} />)}
-        {tab === 'mt-actions' && (m ? <Actions items={m.action_items} canEdit={canEdit} onStatus={setStatus} /> : <NotYet m={m} />)}
+        {tab === 'mt-actions' && (m ? (
+          <>
+            <Actions items={m.action_items} canEdit={canEdit} onStatus={setStatus} />
+            {m.follow_up.length > 0 && <Section title="Outstanding from previous meetings"><FollowUp items={m.follow_up} /></Section>}
+          </>
+        ) : <NotYet m={m} />)}
         {tab === 'mt-decisions' && (m ? <Decisions items={m.decisions} /> : <NotYet m={m} />)}
         {tab === 'mt-transcript' && <Transcript i={i} onJump={audio ? jump : null} />}
         {tab === 'mt-ask' && <AskAI i={i} m={m} contact={contact} />}
@@ -163,11 +168,32 @@ function FormalMinutes({ i, m, contact }) {
         </Section>
       )}
       {m.decisions.length > 0 && <Section title="Decisions made"><Decisions items={m.decisions} /></Section>}
+      {m.follow_up.length > 0 && <Section title="Outstanding from previous meetings"><FollowUp items={m.follow_up} /></Section>}
       {m.action_items.length > 0 && <Section title="Action items"><Actions items={m.action_items} /></Section>}
       {m.issues.length > 0 && <Section title="Issues / risks"><Bullets items={m.issues} /></Section>}
       {m.next_steps.length > 0 && <Section title="Next steps"><Bullets items={m.next_steps} /></Section>}
       {nextMeeting && <Section title="Next meeting"><p>{nextMeeting}</p></Section>}
     </article>
+  );
+}
+
+const FOLLOW_TONE = { Completed: ['ok', 'check'], Overdue: ['danger', 'alert'], Pending: ['warn', 'clock'] };
+
+/** Earlier meetings' action items as this meeting found them: Completed, Overdue or Pending. */
+export function FollowUp({ items }) {
+  return (
+    <ul className="follow-up">
+      {items.map((f) => (
+        <li key={f.ref}>
+          <Icon name={FOLLOW_TONE[f.state][1]} size={16} className={`fu-icon fu-${FOLLOW_TONE[f.state][0]}`} />
+          <div className="action-body">
+            <span><strong>{f.action}</strong>{f.assigned_to && ` — ${f.assigned_to}`} — <Pill tone={FOLLOW_TONE[f.state][0]}>{f.state}</Pill></span>
+            <span className="small muted">From {f.meeting}{f.date && `, ${formatDate(f.date)}`}{f.due && ` · due ${formatDate(f.due)}`}</span>
+            {f.note && <span className="small">{f.note}</span>}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -182,7 +208,7 @@ function Decisions({ items }) {
   );
 }
 
-function Actions({ items, canEdit, onStatus }) {
+export function Actions({ items, canEdit, onStatus }) {
   const today = todayISO();
   if (!items.length) return <p className="muted small">No action items were agreed in this meeting.</p>;
   return (

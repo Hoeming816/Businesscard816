@@ -88,6 +88,18 @@ export function normaliseMinutes(ai = {}) {
     issues: strings(ai.issues),
     next_steps: strings(ai.next_steps),
     next_meeting: text(ai.next_meeting),
+    follow_up: (Array.isArray(ai.follow_up) ? ai.follow_up : [])
+      .map((f) => ({
+        ref: text(f?.ref),
+        action: text(f?.action),
+        assigned_to: text(f?.assigned_to),
+        due: text(f?.due),
+        meeting: text(f?.meeting),
+        date: text(f?.date),
+        state: ['Completed', 'Overdue', 'Pending'].includes(f?.state) ? f.state : 'Pending',
+        note: text(f?.note),
+      }))
+      .filter((f) => f.action),
   };
 }
 
@@ -155,6 +167,7 @@ export function minutesText(i, contact, formatDate = (d) => d) {
   section('DISCUSSION', m.discussion.flatMap((d, k) => [`${k + 1}. ${d.topic}`, ...d.points.map((p) => `   • ${p}`)]));
   section('DECISIONS MADE', m.decisions.map((d, k) => `${decisionLabel(k)}: ${d}`));
   section('ACTION ITEMS', m.action_items.map((a, k) => `${k + 1}. ${actionLine(a, formatDate)}`));
+  section('OUTSTANDING FROM PREVIOUS MEETINGS', m.follow_up.map((f) => `${f.state === 'Completed' ? '✓' : '⚠'} ${[f.action, f.assigned_to, f.state].filter(Boolean).join(' — ')}${f.note ? ` (${f.note})` : ''}`));
   section('ISSUES / RISKS', m.issues.map((x) => `• ${x}`));
   section('NEXT STEPS', m.next_steps.map((x) => `• ${x}`));
   if (m.next_meeting) out.push('', 'NEXT MEETING', /^\d{4}-\d{2}-\d{2}$/.test(m.next_meeting) ? formatDate(m.next_meeting) : m.next_meeting);
@@ -169,4 +182,50 @@ export function dueState(a, today) {
   const soon = new Date(`${today}T00:00:00Z`);
   soon.setUTCDate(soon.getUTCDate() + 3);
   return a.due <= soon.toISOString().slice(0, 10) ? 'soon' : '';
+}
+
+// ---------------------------------------------------------------------------
+// Follow-up tracking across meetings
+// ---------------------------------------------------------------------------
+
+/** Every action item from meetings with minutes, newest meeting first, with its due state. */
+export function allActions(items, today) {
+  return (items || [])
+    .filter((i) => i.minutes?.action_items?.length)
+    .flatMap((i) => normaliseMinutes(i.minutes).action_items.map((a, index) => ({ ...a, index, meeting: i, state: dueState(a, today) })));
+}
+
+/** Open action items from meetings held before `i`, newest first: what the AI checks off at `i`. */
+export function earlierActions(items, i, max = 40) {
+  const before = (x) => x.id !== i.id && (x.occurred_on < i.occurred_on || (x.occurred_on === i.occurred_on && String(x.created_at) < String(i.created_at)));
+  return allActions((items || []).filter(before), i.occurred_on)
+    .filter((a) => a.status !== 'Done')
+    .sort((a, b) => b.meeting.occurred_on.localeCompare(a.meeting.occurred_on))
+    .slice(0, max)
+    .map((a) => ({
+      ref: `${a.meeting.id}:${a.index}`,
+      action: a.action,
+      assigned_to: a.assigned_to,
+      due: a.due,
+      meeting: a.meeting.title || a.meeting.meeting_type || 'Meeting',
+      date: a.meeting.occurred_on,
+      meeting_type: a.meeting.meeting_type,
+    }));
+}
+
+/**
+ * "Outstanding from previous meetings" for meeting `i`: earlier open items the
+ * meeting talked about, plus those from earlier meetings of the same type,
+ * each Completed, Overdue (past due on the meeting date) or Pending.
+ */
+export function outstanding(i, earlier, followUp = []) {
+  const said = new Map(followUp.map((f) => [f.ref, f]));
+  return earlier
+    .filter((a) => said.has(a.ref) || a.meeting_type === i.meeting_type)
+    .map((a) => {
+      const f = said.get(a.ref);
+      const state = f?.status === 'completed' ? 'Completed' : a.due && a.due < i.occurred_on ? 'Overdue' : 'Pending';
+      const { meeting_type: _t, ...rest } = a;
+      return { ...rest, state, note: f?.note || '' };
+    });
 }
