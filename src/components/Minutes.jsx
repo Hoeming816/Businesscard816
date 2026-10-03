@@ -6,7 +6,7 @@ import { canEditInteraction } from '../perms.js';
 import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
-import { Icon, EmptyState, Spinner, formatDate, formatDuration } from './ui.jsx';
+import { Icon, EmptyState, Spinner, ConfirmButton, formatDate, formatDuration } from './ui.jsx';
 
 const SHOW = [
   { value: 'all', label: 'All' },
@@ -115,6 +115,19 @@ export default function Minutes() {
                     {!isMinutes(i) && <span className="minutes-tag">{i.kind}</span>}
                   </span>
                 </button>
+                {!isOpen && canEditInteraction(i, c, role, uid) && (
+                  <span className="minutes-del">
+                    <ConfirmButton
+                      className="icon-btn"
+                      icon="trash"
+                      confirmLabel="Delete"
+                      message={i.audio_path ? 'Delete it and its recording?' : 'Delete this entry?'}
+                      onConfirm={() => remove(i)}
+                    >
+                      <span className="sr-only">Delete {i.title || i.kind}</span>
+                    </ConfirmButton>
+                  </span>
+                )}
                 {isOpen && (
                   <div className="minutes-open">
                     <ol className="entries">
