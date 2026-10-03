@@ -89,7 +89,7 @@ export default function Contacts() {
       <section className="results" aria-labelledby="results-title">
         <div className="results-head">
           <div className="results-title-row">
-            <h1 id="results-title" className="h1">Contacts</h1>
+            <h1 id="results-title" className="h1">Business cards</h1>
             <span className="result-count mono" aria-live="polite">
               {contactsState === 'ready' ? `${filtered.length} of ${contacts.length}` : ''}
             </span>

@@ -387,6 +387,19 @@ export async function listInteractions(contactId) {
   return data || [];
 }
 
+/** Every note, meeting and recording the caller can see in a workspace, newest first. */
+export async function listWorkspaceInteractions(workspaceId, limit = 500) {
+  const { data, error } = await supabase
+    .from('interactions')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .order('occurred_on', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  fail(error);
+  return data || [];
+}
+
 export async function insertInteraction(row) {
   const { data, error } = await supabase.from('interactions').insert(row).select().single();
   fail(error);
@@ -418,11 +431,18 @@ export async function uploadRecording(workspaceId, contactId, interactionId, blo
   return path;
 }
 
+/** Downloads a saved recording so it can be sent for transcription. */
+export async function downloadRecording(path) {
+  const { data, error } = await supabase.storage.from('recordings').download(path);
+  fail(error, 'Could not load the recording');
+  return data;
+}
+
 /** Server-side transcription. Throws with code 'not_configured' if Whisper is off. */
 export async function transcribe(blob, language, ext) {
   const form = new FormData();
   form.append('action', 'transcribe');
-  form.append('language', (language || 'en').slice(0, 2));
+  if (language) form.append('language', language.slice(0, 2)); // left out, Whisper detects it (mixed English/Chinese)
   form.append('audio', blob, `rec.${ext}`);
   try {
     const data = await invoke('meeting-notes', form);
@@ -433,11 +453,12 @@ export async function transcribe(blob, language, ext) {
   }
 }
 
-/** Returns { summary, action_items, follow_up_on, lead_status }. */
+/** Returns { summary, key_points, action_items, follow_up_on, lead_status }. */
 export async function summarise(payload) {
   const data = await invoke('meeting-notes', { action: 'summarise', ...payload });
   return {
     summary: data.summary || '',
+    key_points: Array.isArray(data.key_points) ? data.key_points : [],
     action_items: Array.isArray(data.action_items) ? data.action_items : [],
     follow_up_on: data.follow_up_on || null,
     lead_status: data.lead_status || null,

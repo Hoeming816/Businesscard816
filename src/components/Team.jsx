@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context.js';
-import { Icon, Avatar, Pill, ConfirmButton, formatDate } from './ui.jsx';
+import { Icon, Avatar, Pill, ConfirmButton, SaveLabel, useJustSaved, formatDate } from './ui.jsx';
 
 export const ROLES = ['admin', 'editor', 'viewer'];
 const ROLE_HELP = {
@@ -54,16 +54,23 @@ export default function Team() {
     }
   };
 
+  const [savingName, setSavingName] = useState(false);
+  const [renamed, markRenamed] = useJustSaved();
   const rename = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+    setSavingName(true);
     try {
       await api.renameWorkspace(workspace.id, name);
+      setSavingName(false);
+      markRenamed();
+      await new Promise((r) => setTimeout(r, 900)); // let the button show "Saved" before the form closes
       await reloadWorkspaces();
       setRenaming(false);
-      toast('Saved');
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -91,7 +98,7 @@ export default function Team() {
           <form className="rename" onSubmit={rename}>
             <label htmlFor="ws-name" className="sr-only">Workspace name</label>
             <input id="ws-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoFocus />
-            <button type="submit" className="btn btn-primary btn-sm">Save</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={savingName || renamed}><SaveLabel saving={savingName} saved={renamed}>Save</SaveLabel></button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRenaming(false); setName(workspace.name); }}>Cancel</button>
           </form>
         ) : (

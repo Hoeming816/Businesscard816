@@ -5,7 +5,7 @@ import { load, save } from './storage.js';
 import { canWrite } from './perms.js';
 import { Icon, Logo, Avatar, Spinner } from './components/ui.jsx';
 import AuthScreen, { SuspendedScreen } from './components/Auth.jsx';
-import Contacts from './components/Contacts.jsx';
+import Home from './components/Home.jsx';
 import Scan from './components/Scan.jsx';
 import Team from './components/Team.jsx';
 import SuperAdmin from './components/SuperAdmin.jsx';
@@ -39,16 +39,8 @@ export default function App() {
   const pendingRef = useRef(new Set());
 
   // ----- toasts -----
-  // A successful save ("Saved…") flashes a small "Saved" badge in the middle of
-  // the screen instead of a toast; it fades away on its own.
-  const [flash, setFlash] = useState(null);
   const toast = useCallback((message, tone = 'ok') => {
     const id = Math.random().toString(36).slice(2);
-    if (tone === 'ok' && /^Saved\b/.test(message)) {
-      setFlash({ id, detail: message.replace(/^Saved\.?\s*/, '') });
-      setTimeout(() => setFlash((f) => (f && f.id === id ? null : f)), 1600);
-      return;
-    }
     setToasts((t) => [...t.slice(-2), { id, message, tone }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === 'error' ? 7000 : 3500);
   }, []);
@@ -242,14 +234,13 @@ export default function App() {
       <AppContext.Provider value={ctx}>
         <AuthScreen onSuspended={(reason) => setSuspended({ reason })} />
         <Toasts toasts={toasts} />
-      {flash && <SavedFlash key={flash.id} detail={flash.detail} />}
       </AppContext.Provider>
     );
   }
 
   const isSuper = !!profile?.is_super_admin;
   const nav = [
-    { value: 'contacts', label: 'Contacts', icon: 'cards' },
+    { value: 'contacts', label: 'Home', icon: 'cards' },
     { value: 'scan', label: 'Scan card', icon: 'scan' },
     { value: 'team', label: 'Team', icon: 'users' },
     ...(isSuper ? [{ value: 'admin', label: 'Super admin', icon: 'shield' }] : []),
@@ -269,14 +260,14 @@ export default function App() {
   else if (view === 'team') main = <Team key={workspace.id} />;
   else if (view === 'admin' && isSuper) main = <SuperAdmin />;
   else if (view === 'me') main = <Me />;
-  else main = <Contacts key={workspace.id} />;
+  else main = <Home key={workspace.id} />;
 
   return (
     <AppContext.Provider value={ctx}>
       <div className={`shell view-${view}`}>
         <a className="skip-link" href="#main">Skip to content</a>
         <header className="topbar">
-          <button type="button" className="logo-btn" onClick={() => go('contacts')} aria-label="Nomiqo, go to contacts">
+          <button type="button" className="logo-btn" onClick={() => go('contacts')} aria-label="Nomiqo, go to home">
             <Logo />
           </button>
           <WorkspaceSwitcher />
@@ -318,7 +309,7 @@ export default function App() {
         <main id="main" className="main" tabIndex={-1}>{main}</main>
 
         <nav className="tabbar" aria-label="Main">
-          <TabbarItem icon="cards" label="Contacts" active={view === 'contacts'} onClick={() => go('contacts')} />
+          <TabbarItem icon="cards" label="Home" active={view === 'contacts'} onClick={() => go('contacts')} />
           <TabbarItem icon="users" label="Team" active={view === 'team'} onClick={() => go('team')} />
           <button
             type="button"
@@ -366,7 +357,6 @@ export default function App() {
         />
       )}
       <Toasts toasts={toasts} />
-      {flash && <SavedFlash key={flash.id} detail={flash.detail} />}
     </AppContext.Provider>
   );
 }
@@ -405,16 +395,6 @@ function NoWorkspace({ onMe }) {
         <p className="muted">Your access to every workspace has been revoked or the workspace was suspended. You can create a new workspace from your account page.</p>
         <button type="button" className="btn btn-primary" onClick={onMe}>Go to your account</button>
       </div>
-    </div>
-  );
-}
-
-function SavedFlash({ detail }) {
-  return (
-    <div className="saved-flash" role="status" aria-live="polite">
-      <span className="saved-flash-check" aria-hidden="true"><Icon name="check" size={22} strokeWidth={2.6} /></span>
-      <strong>Saved</strong>
-      {detail && <span className="saved-flash-detail">{detail}</span>}
     </div>
   );
 }

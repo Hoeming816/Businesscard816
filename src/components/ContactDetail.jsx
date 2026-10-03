@@ -8,11 +8,11 @@ import Timeline from './Timeline.jsx';
 import SharePanel from './SharePanel.jsx';
 import CardCropper from './CardCropper.jsx';
 import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
-import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, formatDate, initials } from './ui.jsx';
+import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, SaveLabel, useJustSaved, formatDate, initials } from './ui.jsx';
 
-export default function ContactDetail({ contact, onClose }) {
+export default function ContactDetail({ contact, onClose, initialTab = 'details' }) {
   const { api, uid, role, contacts, upsertContact, removeContact, toast, ensureSigned, signed } = useApp();
-  const [tab, setTab] = useState('details');
+  const [tab, setTab] = useState(initialTab);
   const [side, setSide] = useState('front');
   const [base, setBase] = useState(() => toDraft(contact)); // what editing started from
   const [draft, setDraft] = useState(base);
@@ -70,6 +70,7 @@ export default function ContactDetail({ contact, onClose }) {
     }
   };
 
+  const [justSaved, markSaved] = useJustSaved();
   const save = async () => {
     if (!dirty) {
       toast(photoNote ? 'Already saved. The new photo was saved when you tapped Crop.' : 'Everything is already saved.');
@@ -82,7 +83,7 @@ export default function ContactDetail({ contact, onClose }) {
         upsertContact(updated);
         reset(updated);
       }
-      toast('Saved');
+      markSaved();
     } catch (e) {
       toast(e.message, 'error');
     } finally {
@@ -326,7 +327,7 @@ export default function ContactDetail({ contact, onClose }) {
                   <div className={`save-bar ${dirty ? 'is-dirty' : ''}`}>
                     <span className="muted small">{dirty ? `${Object.keys(changes).length} unsaved change${Object.keys(changes).length === 1 ? '' : 's'}` : 'All changes saved'}</span>
                     <button type="button" className="btn btn-ghost" disabled={!dirty || saving} onClick={() => reset(contact)}>Discard</button>
-                    <button type="button" className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save changes'}</button>
+                    <button type="button" className="btn btn-primary" disabled={saving} onClick={save}><SaveLabel saving={saving} saved={justSaved}>Save changes</SaveLabel></button>
                   </div>
                 )}
               </>

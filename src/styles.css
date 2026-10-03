@@ -710,6 +710,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .entry-title { font-size: 15.5px; }
 .entry-notes { white-space: pre-wrap; color: var(--ink-2); font-size: 14px; }
 .entry-summary { background: var(--accent-soft); border-radius: 9px; padding: 10px 12px; color: var(--ink); }
+.entry-share { margin-top: 6px; }
 .entry-summary .label { color: var(--accent-soft-ink); }
 .entry-summary p { font-size: 14px; margin-top: 3px; }
 .entry-actions ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
@@ -1006,33 +1007,31 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .photo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .photo-note { flex-basis: 100%; margin: 2px 0 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-size: 13px; font-weight: 600; }
 
-/* ---------------------------------------------------------------- "Saved" flash */
-.saved-flash {
-  position: fixed; z-index: 95; left: 50%; top: 42%;
-  display: grid; justify-items: center; gap: 6px; min-width: 132px; max-width: min(300px, calc(100vw - 48px));
-  padding: 18px 22px 16px; border-radius: 18px; text-align: center; pointer-events: none;
-  background: color-mix(in srgb, var(--ink) 88%, transparent); color: var(--bg);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-lg);
-  animation: saved-flash 1.6s ease forwards;
-}
-.saved-flash strong { font-size: 17px; letter-spacing: .01em; }
-.saved-flash-check {
-  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
-  background: var(--ok); color: #fff;
-}
-.saved-flash-detail { font-size: 13px; line-height: 1.35; opacity: .8; }
-@keyframes saved-flash {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(.85); }
-  12% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(.96); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .saved-flash { animation: saved-flash-fade 1.6s linear forwards; transform: translate(-50%, -50%); }
-  @keyframes saved-flash-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
-}
 .entry-audio { flex-wrap: wrap; }
 .rec-meta { flex-basis: 100%; display: block; color: var(--ink-2); font-weight: 600; }
 .rec-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-weight: 600; }
 .rec-meta .icon { vertical-align: -2px; margin-right: 4px; }
+
+/* ---------------------------------------------------------------- Home tabs + meeting minutes */
+.home { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.tab-img { width: 28px; height: 28px; flex: none; object-fit: contain; }
+/* Home tabs: icon on top, name underneath */
+.home-tabs .tab { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 6px; text-align: center; font-size: 14px; padding: 8px 10px 10px; }
+.home-tabs .tab-img { width: 44px; height: 44px; }
+.home-tabs .tab .icon { width: 44px; height: 44px; padding: 8px; }
+@media (min-width: 720px) { .home-tabs .tab { flex: 0 0 160px; } }
+.minutes-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; max-width: 860px; }
+.minutes-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.minutes-row {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.minutes-row:hover:not(:disabled) { border-color: var(--accent); }
+.minutes-row:disabled { cursor: default; opacity: .7; }
+.minutes-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.minutes-row-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.minutes-row-head time { flex: none; color: var(--ink-3); }
+.minutes-row-who { color: var(--ink-2); font-weight: 600; }
+.minutes-row-text { color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.minutes-row-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.minutes-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font-size: 12px; }
