@@ -1007,32 +1007,6 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .photo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .photo-note { flex-basis: 100%; margin: 2px 0 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-size: 13px; font-weight: 600; }
 
-/* ---------------------------------------------------------------- "Saved" flash */
-.saved-flash {
-  position: fixed; z-index: 95; left: 50%; top: 42%;
-  display: grid; justify-items: center; gap: 6px; min-width: 132px; max-width: min(300px, calc(100vw - 48px));
-  padding: 18px 22px 16px; border-radius: 18px; text-align: center; pointer-events: none;
-  background: color-mix(in srgb, var(--ink) 88%, transparent); color: var(--bg);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-lg);
-  animation: saved-flash 1.6s ease forwards;
-}
-.saved-flash strong { font-size: 17px; letter-spacing: .01em; }
-.saved-flash-check {
-  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
-  background: var(--ok); color: #fff;
-}
-.saved-flash-detail { font-size: 13px; line-height: 1.35; opacity: .8; }
-@keyframes saved-flash {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(.85); }
-  12% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(.96); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .saved-flash { animation: saved-flash-fade 1.6s linear forwards; transform: translate(-50%, -50%); }
-  @keyframes saved-flash-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
-}
 .entry-audio { flex-wrap: wrap; }
 .rec-meta { flex-basis: 100%; display: block; color: var(--ink-2); font-weight: 600; }
 .rec-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-weight: 600; }

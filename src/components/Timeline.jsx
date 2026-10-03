@@ -5,7 +5,7 @@ import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
 import Recorder, { useSpeechLanguage, whisperLang } from './Recorder.jsx';
 import { isMinutes, minutesRow, shareOrCopy, shareText } from '../minutes.js';
-import { Icon, Spinner, ConfirmButton, formatDate, formatDuration, EmptyState } from './ui.jsx';
+import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
 
@@ -32,7 +32,6 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
     setEditing(null);
     await loadItems();
     if (bumped) await onContactChanged();
-    toast('Saved');
   };
 
   // A recording is saved as soon as Stop is tapped; the editor stays open on that entry.
@@ -355,6 +354,7 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
     }
   };
 
+  const [justSaved, markSaved] = useJustSaved();
   const save = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -400,6 +400,9 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
           }
         }
       }
+      setSaving(false);
+      markSaved();
+      await new Promise((r) => setTimeout(r, 900)); // let the button show "Saved" before the form closes
       await onSaved(saved, { bumped });
     } catch (err) {
       toast(err.message, 'error');
@@ -502,7 +505,7 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
 
       <div className="save-bar is-dirty">
         <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : existing ? 'Save entry' : 'Add to timeline'}</button>
+        <button type="submit" className="btn btn-primary" disabled={saving || justSaved}><SaveLabel saving={saving} saved={justSaved}>{existing ? 'Save entry' : 'Add to timeline'}</SaveLabel></button>
       </div>
     </form>
   );
