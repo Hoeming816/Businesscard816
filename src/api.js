@@ -300,6 +300,79 @@ export async function scanCard(front, back) {
 }
 
 // ---------------------------------------------------------------------------
+// Sharing a card with another member
+// ---------------------------------------------------------------------------
+
+const SHARE_SELECT =
+  'id, workspace_id, contact_id, sender_id, recipient_id, status, contact_name, contact_title, contact_company, new_contact_id, created_at, responded_at, sender:profiles!card_shares_sender_id_fkey(username, full_name)';
+
+function flattenShare(s) {
+  const { sender, ...rest } = s;
+  return { ...rest, sender_name: sender?.full_name || sender?.username || 'A member' };
+}
+
+/** Offer a card to a member of the same workspace. */
+export async function shareContact(contact, recipientId) {
+  const { data, error } = await supabase
+    .from('card_shares')
+    .insert({ workspace_id: contact.workspace_id, contact_id: contact.id, recipient_id: recipientId })
+    .select(SHARE_SELECT)
+    .single();
+  if (error?.code === '23505') throw new Error('This card is already waiting for their answer.');
+  fail(error, 'Could not share the card');
+  return flattenShare(data);
+}
+
+/** Offers I have made for this card, newest first. */
+export async function listContactShares(contactId) {
+  const { data, error } = await supabase
+    .from('card_shares')
+    .select(SHARE_SELECT)
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: false });
+  fail(error);
+  return (data || []).map(flattenShare);
+}
+
+/** Cards members are waiting for me to accept or decline. */
+export async function listIncomingShares(uid) {
+  const { data, error } = await supabase
+    .from('card_shares')
+    .select(SHARE_SELECT)
+    .eq('recipient_id', uid)
+    .eq('status', 'pending')
+    .order('created_at');
+  fail(error);
+  return (data || []).map(flattenShare);
+}
+
+/** Accept: the card becomes one of my private cards, photos included. Returns the new card. */
+export async function acceptShare(share) {
+  const { data, error } = await supabase.rpc('accept_card_share', { p_share: share.id });
+  fail(error, 'Could not accept the card');
+  const row = Array.isArray(data) ? data[0] : data;
+  const id = row.new_contact_id;
+  const patch = {};
+  for (const [side, path] of [['front', row.front_path], ['back', row.back_path]]) {
+    if (!path) continue;
+    try {
+      const { data: blob, error: dlErr } = await supabase.storage.from('cards').download(path);
+      if (dlErr || !blob) continue;
+      patch[`${side}_path`] = await uploadCardPhoto(share.workspace_id, id, side, blob);
+    } catch { /* the card details still arrive without that photo */ }
+  }
+  if (Object.keys(patch).length) return updateContact(id, patch);
+  return getContact(id);
+}
+
+/** Decline (recipient) or withdraw (sender) an open offer. */
+export async function closeShare(shareId) {
+  const { data, error } = await supabase.rpc('close_card_share', { p_share: shareId });
+  fail(error);
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Interactions (notes & meetings)
 // ---------------------------------------------------------------------------
 

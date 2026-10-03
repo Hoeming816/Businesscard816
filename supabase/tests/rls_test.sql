@@ -166,6 +166,64 @@ update public.workspaces set status = 'active' where id = :'ws';
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 select pg_temp.ok((select count(*) from public.contacts) = 2, 'reactivated workspace restores access');
 
+-- ---------------------------------------------------------------- card sharing
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+update public.workspace_members set role = 'editor', status = 'active'
+ where workspace_id = :'ws' and user_id = '00000000-0000-0000-0000-00000000000b';
+select public.add_member(:'ws', 'carol', 'viewer');
+insert into storage.objects (bucket_id, name) values ('cards', :'ws' || '/10000000-0000-0000-0000-000000000002/front-9.jpg');
+update public.contacts
+   set front_path = :'ws' || '/10000000-0000-0000-0000-000000000002/front-9.jpg',
+       notes = 'secret note', lead_status = 'Won', job_title = 'CTO'
+ where id = '10000000-0000-0000-0000-000000000002';
+
+insert into public.card_shares (id, workspace_id, contact_id, recipient_id, sender_id, status, contact_name)
+values ('30000000-0000-0000-0000-000000000001', :'ws', '10000000-0000-0000-0000-000000000002',
+        '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000b', 'accepted', 'forged');
+select pg_temp.ok((select sender_id = auth.uid() and status = 'pending' and contact_name = 'Alice Private' and contact_title = 'CTO'
+                   from public.card_shares where id = '30000000-0000-0000-0000-000000000001'),
+                  'share pins sender, pending status and the card snapshot');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b')$$, 'only one open offer per card and person');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000c')$$, 'cannot share with a viewer');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000d')$$, 'cannot share with a non-member');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000a')$$, 'cannot share with yourself');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws_dave' || $$', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b')$$, 'share must be in the card''s workspace');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select pg_temp.ok((select count(*) from public.card_shares) = 0, 'outsider sees no shares');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select pg_temp.ok((select count(*) from public.card_shares) = 0, 'other members do not see the offer');
+select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000001')$$, 'only the recipient can accept');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok((select count(*) from public.card_shares where recipient_id = auth.uid() and status = 'pending') = 1, 'recipient sees the offer');
+select pg_temp.ok(not exists (select 1 from public.contacts where id = '10000000-0000-0000-0000-000000000002'), 'offer does not reveal the private card itself');
+select pg_temp.ok(exists (select 1 from storage.objects where name like '%/10000000-0000-0000-0000-000000000002/front-9.jpg'), 'recipient can read the offered card''s photo');
+select pg_temp.fails($$update public.card_shares set status = 'accepted'$$, 'no direct status changes');
+select pg_temp.fails($$delete from public.card_shares$$, 'no direct deletes');
+select new_contact_id as copy, front_path as copy_front from public.accept_card_share('30000000-0000-0000-0000-000000000001') \gset
+select pg_temp.ok((select is_private and created_by = auth.uid() and full_name = 'Alice Private' and job_title = 'CTO'
+                          and notes is null and lead_status is null and front_path is null
+                   from public.contacts where id = :'copy'), 'accept makes a private copy without the sender''s notes or pipeline');
+select pg_temp.ok(:'copy_front' like '%/front-9.jpg', 'accept returns the original photo path to copy');
+insert into storage.objects (bucket_id, name) values ('cards', :'ws' || '/' || :'copy' || '/front-1.jpg');
+select pg_temp.ok(true, 'recipient can upload photos to the copy');
+select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000001')$$, 'an offer can be accepted only once');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok((select status from public.card_shares where id = '30000000-0000-0000-0000-000000000001') = 'accepted', 'sender sees it was accepted');
+select pg_temp.ok(not exists (select 1 from public.contacts where id = :'copy'), 'sender cannot see the recipient''s private copy');
+select pg_temp.fails($$insert into public.card_shares (workspace_id, contact_id, recipient_id) values ('$$ || :'ws' || $$', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b')$$, 'cannot share a card you cannot see');
+insert into public.contacts (id, workspace_id, full_name, company)
+values ('10000000-0000-0000-0000-000000000009', :'ws', 'Team Card', 'Acme');
+insert into public.card_shares (id, workspace_id, contact_id, recipient_id)
+values ('30000000-0000-0000-0000-000000000002', :'ws', '10000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000b'),
+       ('30000000-0000-0000-0000-000000000003', :'ws', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b');
+select pg_temp.ok(public.close_card_share('30000000-0000-0000-0000-000000000003') = 'cancelled', 'sender can withdraw an open offer');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(public.close_card_share('30000000-0000-0000-0000-000000000002') = 'declined', 'recipient can decline');
+select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000003')$$, 'withdrawn offer cannot be accepted');
+
 -- ---------------------------------------------------------------- anon
 reset role;
 set role anon;
@@ -173,5 +231,7 @@ select pg_temp.ok(public.username_available('newperson') and not public.username
 select pg_temp.fails($$select count(*) from public.contacts$$, 'anon cannot read contacts');
 select pg_temp.fails($$select public.ws_role('$$ || :'ws' || $$')$$, 'anon cannot call helper predicates');
 select pg_temp.fails($$select public.super_admin_workspaces()$$, 'anon cannot call dashboard RPC');
+select pg_temp.fails($$select count(*) from public.card_shares$$, 'anon cannot read shares');
+select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000002')$$, 'anon cannot accept shares');
 reset role;
 \echo 'ALL RLS TESTS PASSED'
