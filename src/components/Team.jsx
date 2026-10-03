@@ -61,7 +61,7 @@ export default function Team() {
       await api.renameWorkspace(workspace.id, name);
       await reloadWorkspaces();
       setRenaming(false);
-      toast('Workspace renamed');
+      toast('Saved');
     } catch (err) {
       toast(err.message, 'error');
     }

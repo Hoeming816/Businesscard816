@@ -19,7 +19,7 @@ export default function Me() {
     setSavingName(true);
     try {
       setProfile(await api.updateFullName(profile.id, name.trim()));
-      toast('Name updated');
+      toast('Saved');
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -37,7 +37,7 @@ export default function Me() {
       await api.updatePassword(pw);
       setPw('');
       setPw2('');
-      toast('Password changed');
+      toast('Saved. Your password is changed.');
     } catch (err) {
       setPwError(err.message);
     } finally {

@@ -5,8 +5,17 @@ import { Icon, formatDuration } from './ui.jsx';
 
 const LANG_KEY = 'cardfile.speechLang';
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/aac'];
+const STOP_GRACE_MS = 2500; // if the browser never fires "stop", finish with what was captured
 
-export const SpeechRecognitionImpl = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+// Safari (iPhone, iPad and Mac) shares one microphone between recording and live
+// speech recognition; running both can silence the recording and stop it from
+// finishing. There the live transcript is skipped; Transcribe works afterwards.
+const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+export const isAppleWebKit = /iP(hone|ad|od)/.test(ua)
+  || (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  || (/Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Android/.test(ua));
+export const SpeechRecognitionImpl = typeof window !== 'undefined' && !isAppleWebKit
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
 export const canRecord = typeof window !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 
 export function pickMime() {
@@ -32,7 +41,7 @@ export function useSpeechLanguage() {
  * onRecorded({ blob, ext, duration, url, liveTranscript })
  */
 export default function Recorder({ onRecorded, lang, setLang, autoStart = false }) {
-  const [phase, setPhase] = useState(autoStart ? 'consent' : 'idle'); // idle | consent | starting | recording
+  const [phase, setPhase] = useState(autoStart ? 'consent' : 'idle'); // idle | consent | starting | recording | stopping
   const [elapsed, setElapsed] = useState(0);
   const [live, setLive] = useState('');
   const [error, setError] = useState('');
@@ -43,6 +52,7 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
     const r = rec.current;
     if (r.raf) cancelAnimationFrame(r.raf);
     if (r.timer) clearInterval(r.timer);
+    if (r.stopTimer) clearTimeout(r.stopTimer);
     if (r.recognition) { r.stopRecognition = true; try { r.recognition.stop(); } catch { /* ignore */ } }
     if (r.stream) r.stream.getTracks().forEach((t) => t.stop());
     if (r.audioCtx) r.audioCtx.close().catch(() => {});
@@ -54,24 +64,38 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
     setError('');
     setLive('');
     setPhase('starting');
+    const pending = { pending: true };
+    rec.current = pending;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      if (rec.current !== pending) { stream.getTracks().forEach((t) => t.stop()); return; } // cancelled while starting
       const mime = pickMime();
       const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       const chunks = [];
       const r = { stream, mr, chunks, startedAt: Date.now(), finalText: '' };
       rec.current = r;
       mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-      mr.onstop = () => {
-        const type = mr.mimeType || mime || 'audio/webm';
+      // Runs once, from "stop", from the grace timer, or when the microphone goes away.
+      r.finish = () => {
+        if (r.done) return;
+        r.done = true;
+        const type = (mr.mimeType || mime || 'audio/webm').split(';')[0];
         const blob = new Blob(chunks, { type });
-        const duration = Math.round((Date.now() - r.startedAt) / 1000);
+        const duration = Math.max(1, Math.round(((r.stoppedAt || Date.now()) - r.startedAt) / 1000));
         const liveTranscript = r.finalText.trim();
         cleanup();
         setPhase('idle');
+        if (!blob.size) {
+          setError('Nothing was recorded. Check that Nomiqo may use the microphone, then try again.');
+          return;
+        }
         onRecorded({ blob, ext: extFor(type), duration, url: URL.createObjectURL(blob), liveTranscript });
       };
-      mr.start(1000);
+      mr.onstop = () => r.finish();
+      mr.onerror = () => r.finish();
+      stream.getAudioTracks().forEach((t) => t.addEventListener('ended', () => { if (mr.state !== 'inactive') { try { mr.stop(); } catch { r.finish(); } } }));
+      // Safari's chunked recording can produce files that won't play; record in one piece there.
+      if (isAppleWebKit) mr.start(); else mr.start(1000);
 
       // Level meter
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -131,8 +155,18 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
 
   const stop = () => {
     const r = rec.current;
+    if (!r.mr) { cleanup(); setPhase('idle'); return; }
+    r.stoppedAt = Date.now();
+    setPhase('stopping');
+    if (r.timer) clearInterval(r.timer);
     if (r.recognition) { r.stopRecognition = true; try { r.recognition.stop(); } catch { /* ignore */ } }
-    if (r.mr && r.mr.state !== 'inactive') r.mr.stop();
+    try {
+      if (r.mr.state !== 'inactive') r.mr.stop();
+      else r.finish();
+    } catch {
+      r.finish();
+    }
+    r.stopTimer = setTimeout(() => r.finish(), STOP_GRACE_MS);
   };
 
   if (!canRecord) {
@@ -168,17 +202,17 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
         </div>
       )}
 
-      {(phase === 'starting' || phase === 'recording') && (
+      {(phase === 'starting' || phase === 'recording' || phase === 'stopping') && (
         <div className="rec-live">
           <div className="rec-head">
             <span className="rec-dot" aria-hidden="true" />
             <span className="rec-time mono" aria-live="off">{formatDuration(elapsed)}</span>
             <span className="meter" aria-hidden="true"><span ref={meterRef} className="meter-fill" /></span>
-            <button type="button" className="btn btn-danger" onClick={stop} disabled={phase !== 'recording'}>
-              <Icon name="stop" size={16} /> Stop
+            <button type="button" className="btn btn-danger" onClick={stop} disabled={phase === 'stopping'}>
+              <Icon name="stop" size={16} /> {phase === 'stopping' ? 'Saving…' : 'Stop'}
             </button>
           </div>
-          <p className="sr-only" role="status">{phase === 'recording' ? 'Recording' : 'Starting microphone'}</p>
+          <p className="sr-only" role="status">{phase === 'recording' ? 'Recording' : phase === 'stopping' ? 'Saving the recording' : 'Starting microphone'}</p>
           {SpeechRecognitionImpl && (
             <div className="live-transcript" aria-live="polite">
               <span className="label">Live transcript</span>
