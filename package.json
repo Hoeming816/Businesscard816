@@ -1,0 +1,26 @@
+{
+  "name": "cardfile",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/sync-taxonomy.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "build:preview": "node scripts/sync-taxonomy.mjs && vite build --mode demo && node scripts/copy-preview.mjs",
+    "sync:taxonomy": "node scripts/sync-taxonomy.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.0",
+    "vite-plugin-singlefile": "^2.0.2",
+    "vitest": "^2.1.0"
+  }
+}
