@@ -9,9 +9,10 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // Whisper's upload limit
 const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["summary", "action_items", "follow_up_on", "lead_status"],
+  required: ["summary", "key_points", "action_items", "follow_up_on", "lead_status"],
   properties: {
     summary: { type: "string" },
+    key_points: { type: "array", items: { type: "string" } },
     action_items: { type: "array", items: { type: "string" } },
     follow_up_on: { type: "string" },
     lead_status: { type: "string" },
@@ -21,10 +22,13 @@ const SUMMARY_SCHEMA = {
 const SYSTEM = `You summarise a salesperson's notes and conversation transcripts about one business contact, for the team's shared contact history.
 
 Return:
-- summary: 3 to 6 plain sentences covering what was discussed, decisions, the contact's needs or objections, and where the opportunity stands. Write in English even if the transcript mixes languages.
+- summary: 3 to 6 plain sentences covering what was discussed, decisions, the contact's needs or objections, and where the opportunity stands.
+- key_points: the main points raised, one short line each, in the order they came up (prices, quantities, dates, decisions, concerns). Empty list if none.
 - action_items: short imperative tasks with an owner when one is clear ("Send revised CCTV quote to Maria"). Empty list if none.
 - follow_up_on: a suggested next follow-up date as YYYY-MM-DD, based on what was agreed (or a sensible default of about one week after the meeting date when a follow-up is implied). Empty string if no follow-up makes sense.
 - lead_status: the most fitting status from ${LEAD_STATUSES.map((s) => `"${s}"`).join(", ")} after this conversation, or an empty string if the notes give no signal.
+
+Write summary, key_points and action_items in the language the conversation was held in. If it is in Chinese, write in Chinese; if it mixes languages (for example English and Chinese), keep that mix as the speakers did, and keep names, product terms and numbers exactly as spoken. Do not translate.
 
 Only use what is in the notes and transcript; do not invent facts. A transcript from live speech recognition may contain recognition errors, so read it for meaning.`;
 
@@ -43,7 +47,7 @@ async function summarise(body: Record<string, unknown>) {
   ].join("\n");
 
   const result = await structuredReply<{
-    summary: string; action_items: string[]; follow_up_on: string; lead_status: string;
+    summary: string; key_points: string[]; action_items: string[]; follow_up_on: string; lead_status: string;
   }>({
     system: SYSTEM,
     content: [{
@@ -55,6 +59,7 @@ async function summarise(body: Record<string, unknown>) {
 
   return {
     summary: result.summary.trim(),
+    key_points: result.key_points.map((a) => a.trim()).filter(Boolean),
     action_items: result.action_items.map((a) => a.trim()).filter(Boolean),
     follow_up_on: /^\d{4}-\d{2}-\d{2}$/.test(result.follow_up_on) ? result.follow_up_on : null,
     lead_status: LEAD_STATUSES.includes(result.lead_status) ? result.lead_status : null,

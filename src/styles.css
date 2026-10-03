@@ -710,6 +710,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .entry-title { font-size: 15.5px; }
 .entry-notes { white-space: pre-wrap; color: var(--ink-2); font-size: 14px; }
 .entry-summary { background: var(--accent-soft); border-radius: 9px; padding: 10px 12px; color: var(--ink); }
+.entry-share { margin-top: 6px; }
 .entry-summary .label { color: var(--accent-soft-ink); }
 .entry-summary p { font-size: 14px; margin-top: 3px; }
 .entry-actions ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
