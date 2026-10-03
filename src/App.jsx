@@ -6,7 +6,7 @@ import { canWrite } from './perms.js';
 import { featureOn } from './features.js';
 import { Icon, Logo, Avatar, Spinner } from './components/ui.jsx';
 import AuthScreen, { SuspendedScreen } from './components/Auth.jsx';
-import Home from './components/Home.jsx';
+import Home, { resetHomeSection } from './components/Home.jsx';
 import Scan from './components/Scan.jsx';
 import Team from './components/Team.jsx';
 import SuperAdmin from './components/SuperAdmin.jsx';
@@ -57,6 +57,7 @@ export default function App() {
   }, []);
 
   const resetSession = useCallback(() => {
+    resetHomeSection(); // the next sign-in starts at the selection page
     setProfile(null);
     setWorkspaces(null);
     setWsId(null);
