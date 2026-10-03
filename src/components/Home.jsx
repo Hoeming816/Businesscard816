@@ -3,12 +3,11 @@ import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
 import { Tabs } from './ui.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
-import minutesIcon from '../assets/tab-meeting-minutes.png';
 
 // Tab icons: an image (img), or a built-in icon name (icon).
 const TAB_ICONS = {
   cards: { img: cardsIcon },
-  minutes: { img: minutesIcon },
+  minutes: { icon: 'history' }, // placeholder: the Meeting icon is on hold
 };
 
 const TAB_KEY = 'nomiqo.homeTab';
@@ -30,7 +29,7 @@ export default function Home() {
         onChange={setTab}
         tabs={[
           { value: 'cards', label: 'Business Cards', ...TAB_ICONS.cards },
-          { value: 'minutes', label: 'Meeting', ...TAB_ICONS.minutes },
+          { value: 'minutes', label: 'Meeting Minutes', ...TAB_ICONS.minutes },
         ]}
       />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
