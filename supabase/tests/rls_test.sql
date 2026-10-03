@@ -250,6 +250,26 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 insert into storage.objects (bucket_id, name) values ('recordings', :'ws' || '/10000000-0000-0000-0000-000000000002/r-2.webm');
 select pg_temp.ok(true, 'recording upload works again once switched back on');
 
+-- ---------------------------------------------------------------- meetings without a card
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into public.interactions (id, workspace_id, kind, title)
+values ('40000000-0000-0000-0000-000000000001', :'ws', 'Meeting', 'Board meeting');
+select pg_temp.ok((select contact_id is null and created_by = auth.uid() from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'meeting without a card is saved as the author''s');
+insert into storage.objects (bucket_id, name) values ('recordings', :'ws' || '/m-00000000-0000-0000-0000-00000000000a/40000000-1.webm');
+select pg_temp.ok(true, 'author uploads the meeting recording to their own folder');
+update public.interactions set summary = 'ok' where id = '40000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select summary from public.interactions where id = '40000000-0000-0000-0000-000000000001') = 'ok', 'author can update their meeting');
+select pg_temp.fails($$insert into public.interactions (workspace_id, title) values ('$$ || :'ws_dave' || $$', 'x')$$, 'cannot add a meeting to a workspace you are not in');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(not exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'other members cannot see someone''s meeting');
+select pg_temp.ok(not exists (select 1 from storage.objects where name like '%/m-00000000-0000-0000-0000-00000000000a/%'), 'other members cannot see someone''s meeting recording');
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('recordings', '$$ || :'ws' || $$/m-00000000-0000-0000-0000-00000000000a/evil.webm')$$, 'cannot upload into someone else''s meeting folder');
+delete from public.interactions where id = '40000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok(exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'other members cannot delete someone''s meeting');
+delete from public.interactions where id = '40000000-0000-0000-0000-000000000001';
+select pg_temp.ok(not exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'author can delete their meeting');
+
 -- ---------------------------------------------------------------- anon
 reset role;
 set role anon;

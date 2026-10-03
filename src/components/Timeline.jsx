@@ -13,7 +13,6 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(null); // null | 'new' | interaction
-  const [making, setMaking] = useState(null); // id of the recording entry minutes are being made for
 
   const loadItems = useCallback(async () => {
     try {
@@ -33,70 +32,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
     if (bumped) await onContactChanged();
   };
 
-  const removeRecording = async (i) => {
-    try {
-      await api.removeStorageObjects('recordings', [i.audio_path]);
-      const updated = await api.updateInteraction(i.id, { audio_path: null, duration_sec: null });
-      setItems((list) => list.map((x) => (x.id === i.id ? updated : x)));
-      toast('Recording deleted');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
-
-  // Recording -> transcript (Whisper) -> minutes (Claude) -> a new Note on this contact.
-  const makeMinutes = async (i) => {
-    setMaking(i.id);
-    try {
-      let transcript = i.transcript || '';
-      if (!transcript) {
-        try {
-          const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-          transcript = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
-        } catch (e) {
-          if (e.code !== 'not_configured') throw e;
-          if (!i.notes) {
-            throw new Error('Turning a recording into text needs transcription switched on. Ask your admin to add the AI_GATEWAY_API_KEY secret in Supabase.');
-          }
-        }
-        if (!transcript && !i.notes) throw new Error('No speech was found in this recording.');
-        if (transcript) await api.updateInteraction(i.id, { transcript });
-      }
-      const ai = await api.summarise({
-        notes: i.notes || '',
-        transcript,
-        kind: i.kind,
-        contact: { full_name: contact.full_name, company: contact.company, job_title: contact.job_title, lead_status: contact.lead_status },
-        today: i.occurred_on,
-      });
-      await api.insertInteraction({ ...minutesRow(i, ai, transcript), contact_id: contact.id, workspace_id: contact.workspace_id });
-      await loadItems();
-      toast('Saved. Minutes added as a note.');
-    } catch (e) {
-      toast(`Could not make minutes: ${e.message}`, 'error');
-    } finally {
-      setMaking(null);
-    }
-  };
-
-  const share = async (i) => {
-    try {
-      const r = await shareOrCopy(i.title || i.kind, shareText(i, contact, formatDate));
-      if (r === 'copied') toast('Copied. Paste it into WhatsApp, email or anywhere.');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
-
-  const remove = async (i) => {
-    try {
-      await api.deleteInteraction(i);
-      setItems((list) => list.filter((x) => x.id !== i.id));
-      toast('Entry deleted');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
+  const { making, makeMinutes, share, removeRecording, remove } = useEntryActions({ reload: loadItems, contactFor: () => contact });
 
   return (
     <div className="timeline">
@@ -150,6 +86,86 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
   );
 }
 
+/**
+ * What can be done to a saved entry: make AI minutes from its recording, share
+ * it, delete its recording or delete it. contactFor(entry) gives its card, or
+ * null for a meeting recorded without one.
+ */
+export function useEntryActions({ reload, contactFor }) {
+  const { api, toast } = useApp();
+  const [making, setMaking] = useState(null); // id of the entry minutes are being made for
+
+  const removeRecording = async (i) => {
+    try {
+      await api.removeStorageObjects('recordings', [i.audio_path]);
+      await api.updateInteraction(i.id, { audio_path: null, duration_sec: null });
+      await reload();
+      toast('Recording deleted');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  // Recording -> transcript -> minutes (Claude) -> a new Note next to it.
+  const makeMinutes = async (i) => {
+    const contact = contactFor(i);
+    setMaking(i.id);
+    try {
+      let transcript = i.transcript || '';
+      if (!transcript) {
+        try {
+          const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
+          transcript = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
+        } catch (e) {
+          if (e.code !== 'not_configured') throw e;
+          if (!i.notes) {
+            throw new Error('Turning a recording into text needs transcription switched on. Ask your admin to add the AI_GATEWAY_API_KEY secret in Supabase.');
+          }
+        }
+        if (!transcript && !i.notes) throw new Error('No speech was found in this recording.');
+        if (transcript) await api.updateInteraction(i.id, { transcript });
+      }
+      const ai = await api.summarise({
+        notes: i.notes || '',
+        transcript,
+        kind: i.kind,
+        contact: contact
+          ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title, lead_status: contact.lead_status }
+          : {},
+        today: i.occurred_on,
+      });
+      await api.insertInteraction({ ...minutesRow(i, ai, transcript), contact_id: i.contact_id || null, workspace_id: i.workspace_id });
+      await reload();
+      toast('Saved. Minutes added as a note.');
+    } catch (e) {
+      toast(`Could not make minutes: ${e.message}`, 'error');
+    } finally {
+      setMaking(null);
+    }
+  };
+
+  const share = async (i) => {
+    try {
+      const r = await shareOrCopy(i.title || i.kind, shareText(i, contactFor(i), formatDate));
+      if (r === 'copied') toast('Copied. Paste it into WhatsApp, email or anywhere.');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const remove = async (i) => {
+    try {
+      await api.deleteInteraction(i);
+      await reload();
+      toast('Entry deleted');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  return { making, makeMinutes, share, removeRecording, remove };
+}
+
 /** When a recording was made: from its file name (…-<ms>.ext), else when the entry was created. */
 export function recordedAt(i) {
   const m = /-(\d{13})\.\w+$/.exec(i.audio_path || '');
@@ -158,7 +174,7 @@ export function recordedAt(i) {
 }
 const formatDateTime = (d) => d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
+export function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
   const { ensureSigned, signed } = useApp();
   useEffect(() => { if (i.audio_path) ensureSigned('recordings', [i.audio_path]); }, [i.audio_path, ensureSigned]);
   const audio = i.audio_path ? signed('recordings', i.audio_path) : null;
@@ -172,7 +188,7 @@ function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteR
           <span className="muted small">· {author}</span>
           {canEdit && (
             <span className="entry-tools">
-              <button type="button" className="icon-btn" onClick={onEdit} aria-label="Edit entry"><Icon name="edit" size={16} /></button>
+              {onEdit && <button type="button" className="icon-btn" onClick={onEdit} aria-label="Edit entry"><Icon name="edit" size={16} /></button>}
               <ConfirmButton className="icon-btn" icon="trash" confirmLabel="Delete" message="Delete entry?" onConfirm={onDelete}>
                 <span className="sr-only">Delete entry</span>
               </ConfirmButton>

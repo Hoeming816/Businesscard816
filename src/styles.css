@@ -1043,3 +1043,10 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .feature-switch input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); flex: none; }
 .feature-on { color: var(--ok); font-weight: 600; }
 .feature-off { color: var(--danger); font-weight: 600; }
+
+/* Meeting Minutes: record a meeting */
+.record-meeting-btn { width: 100%; justify-content: center; margin-top: 12px; padding: 14px 18px; font-size: 1.05rem; }
+.meeting-recorder { margin-top: 12px; padding: 16px; display: grid; gap: 12px; }
+.minutes-list > li.is-open .minutes-row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.minutes-open { background: var(--surface); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; padding: 12px; display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.minutes-open .entries { width: 100%; margin: 0; }
