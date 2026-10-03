@@ -10,7 +10,7 @@ import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, form
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
 
 export default function Timeline({ contact, canAdd, onContactChanged }) {
-  const { api, uid, role, memberName, toast } = useApp();
+  const { api, uid, role, memberName, toast, can } = useApp();
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(null); // null | 'new' | 'record' | interaction
@@ -113,9 +113,11 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
           <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
             <Icon name="plus" size={16} /> Add meeting or note
           </button>
-          <button type="button" className="btn btn-outline" onClick={() => setEditing('record')}>
-            <Icon name="mic" size={16} /> Record conversation
-          </button>
+          {can('recording') && (
+            <button type="button" className="btn btn-outline" onClick={() => setEditing('record')}>
+              <Icon name="mic" size={16} /> Record conversation
+            </button>
+          )}
         </div>
       )}
       {editing && (
@@ -146,6 +148,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
                 i={i}
                 author={i.created_by === uid ? 'You' : memberName(i.created_by)}
                 canEdit={canEditInteraction(i, contact, role, uid)}
+                canMakeMinutes={can('ai_minutes')}
                 onEdit={() => setEditing(i)}
                 onDelete={() => remove(i)}
                 onDeleteRecording={() => removeRecording(i)}
@@ -170,7 +173,7 @@ export function recordedAt(i) {
 }
 const formatDateTime = (d) => d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
+function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
   const { ensureSigned, signed } = useApp();
   useEffect(() => { if (i.audio_path) ensureSigned('recordings', [i.audio_path]); }, [i.audio_path, ensureSigned]);
   const audio = i.audio_path ? signed('recordings', i.audio_path) : null;
@@ -213,7 +216,7 @@ function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making
               {i.duration_sec != null && <span className="mono muted"> · {formatDuration(i.duration_sec)}</span>}
             </span>
             {audio ? <audio controls preload="none" src={audio} aria-label={`Recording, ${formatDuration(i.duration_sec)}`} /> : <span className="muted small">Loading recording…</span>}
-            {canEdit && (
+            {canEdit && canMakeMinutes && (
               <button type="button" className="btn btn-outline btn-sm" onClick={onMakeMinutes} disabled={busy}>
                 {making ? <><Spinner /> Making minutes…</> : <><Icon name="sparkles" size={14} /> Make minutes with AI</>}
               </button>
@@ -242,7 +245,8 @@ function Entry({ i, author, canEdit, onEdit, onDelete, onDeleteRecording, making
 }
 
 function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, onAutoSaved }) {
-  const { api, toast, upsertContact } = useApp();
+  const { api, toast, upsertContact, can } = useApp();
+  const ai = can('ai_minutes');
   const [lang, setLang] = useSpeechLanguage();
   const [f, setF] = useState(() => ({
     kind: existing?.kind || 'Meeting',
@@ -445,16 +449,18 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
           <div className="rec-done">
             <audio controls src={recording.url} aria-label="New recording" />
             <span className="mono small">{formatDuration(recording.duration)}</span>
-            <button type="button" className="btn btn-outline btn-sm" onClick={doTranscribe} disabled={transcribing}>
-              {transcribing ? <><Spinner /> Transcribing…</> : <><Icon name="edit" size={14} /> Transcribe recording</>}
-            </button>
+            {ai && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={doTranscribe} disabled={transcribing}>
+                {transcribing ? <><Spinner /> Transcribing…</> : <><Icon name="edit" size={14} /> Transcribe recording</>}
+              </button>
+            )}
             {recSaving ? <span className="small muted"><Spinner /> Saving recording…</span>
               : recording.saved ? <span className="small rec-saved"><Icon name="check" size={14} /> Saved</span>
                 : <button type="button" className="btn btn-outline btn-sm" onClick={() => saveRecording(recording, f)}>Try saving again</button>}
           </div>
-        ) : (
+        ) : can('recording') ? (
           <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} autoStart={autoRecord} />
-        )}
+        ) : !existingAudio && <span className="muted small">Recording is turned off for your account.</span>}
         {recError && <p className="form-error" role="alert">{recError}</p>}
         {transcribeMsg && <p className="notice notice-warn">{transcribeMsg}</p>}
       </div>
@@ -467,9 +473,11 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
       <div className="ai-box">
         <div className="ai-head">
           <span className="label"><Icon name="sparkles" size={14} /> AI summary</span>
-          <button type="button" className="btn btn-outline btn-sm" onClick={doSummarise} disabled={summarising}>
-            {summarising ? <><Spinner /> Summarising…</> : <><Icon name="sparkles" size={14} /> Summarise with AI</>}
-          </button>
+          {ai && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={doSummarise} disabled={summarising}>
+              {summarising ? <><Spinner /> Summarising…</> : <><Icon name="sparkles" size={14} /> Summarise with AI</>}
+            </button>
+          )}
         </div>
         <div className="field">
           <label htmlFor="int-summary" className="sr-only">Summary</label>

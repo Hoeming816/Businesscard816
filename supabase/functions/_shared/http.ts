@@ -38,7 +38,7 @@ export function serve(handler: (req: Request) => Promise<Response>) {
 export interface Caller {
   id: string;
   client: SupabaseClient; // acts as the caller, so RLS applies
-  profile: { id: string; username: string; is_super_admin: boolean; status: string };
+  profile: { id: string; username: string; is_super_admin: boolean; status: string; features: Record<string, boolean> | null };
 }
 
 // Resolves the signed-in caller from the Authorization header and rejects
@@ -57,12 +57,19 @@ export async function requireCaller(req: Request): Promise<Caller> {
 
   const { data: profile } = await client
     .from("profiles")
-    .select("id, username, is_super_admin, status")
+    .select("id, username, is_super_admin, status, features")
     .eq("id", user.id)
     .single();
   if (!profile || profile.status !== "active") throw new HttpError(403, "Your access has been suspended.");
 
   return { id: user.id, client, profile };
+}
+
+// Refuses a feature a super admin has switched off for this user (unset = on).
+export function requireFeature(caller: Caller, feature: string, label: string) {
+  if (caller.profile.features?.[feature] === false) {
+    throw new HttpError(403, `${label} is turned off for your account. Ask your super admin.`);
+  }
 }
 
 export function serviceClient(): SupabaseClient {

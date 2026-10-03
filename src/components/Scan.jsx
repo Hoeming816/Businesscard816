@@ -9,7 +9,8 @@ import ContactForm from './ContactForm.jsx';
 import { Icon, Spinner, EmptyState } from './ui.jsx';
 
 export default function Scan() {
-  const { api, uid, role, workspace, contacts, upsertContact, toast, setView, quickShot, clearQuickShot } = useApp();
+  const { api, uid, role, workspace, contacts, upsertContact, toast, setView, quickShot, clearQuickShot, can } = useApp();
+  const aiRead = can('scan_ai');
   const [front, setFront] = useState(null); // { blob, url, base64 }
   const [back, setBack] = useState(null);
   const [draft, setDraft] = useState(blankDraft);
@@ -70,7 +71,7 @@ export default function Scan() {
       if (!alive.current) return;
       setSide(crop.side, img);
       setCrop(null);
-      if (crop.side === 'Front' && crop.autoRead) read(img);
+      if (crop.side === 'Front' && crop.autoRead && aiRead) read(img);
     } catch (e) {
       toast(e.message || 'Could not crop that photo.', 'error');
     } finally {
@@ -243,10 +244,14 @@ export default function Scan() {
         <section className="scan-photos" aria-label="Card photos">
           <PhotoSlot label="Front" required busy={loadingSide === 'Front'} value={front} onPick={(f) => startCrop(f, 'Front', !hasContent)} onChange={setFront} />
           <PhotoSlot label="Back" busy={loadingSide === 'Back'} value={back} onPick={(f) => startCrop(f, 'Back')} onChange={setBack} />
-          <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={() => read()}>
-            {reading ? <><Spinner /> Reading card…</> : <><Icon name="sparkles" size={18} /> {readDone ? 'Read card again' : 'Read card'}</>}
-          </button>
-          {!front && <p className="help center">A front photo is needed for AI reading.</p>}
+          {aiRead ? (
+            <>
+              <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!front || reading} onClick={() => read()}>
+                {reading ? <><Spinner /> Reading card…</> : <><Icon name="sparkles" size={18} /> {readDone ? 'Read card again' : 'Read card'}</>}
+              </button>
+              {!front && <p className="help center">A front photo is needed for AI reading.</p>}
+            </>
+          ) : <p className="help center">Type the card details in below.</p>}
           {readError && (
             <div className="notice notice-error" role="alert">
               <strong>Couldn't read the card.</strong> {readError} You can still fill in the details by hand.

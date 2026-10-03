@@ -3,6 +3,7 @@ import * as api from './api.js';
 import { AppContext, useApp } from './context.js';
 import { load, save } from './storage.js';
 import { canWrite } from './perms.js';
+import { featureOn } from './features.js';
 import { Icon, Logo, Avatar, Spinner } from './components/ui.jsx';
 import AuthScreen, { SuspendedScreen } from './components/Auth.jsx';
 import Home from './components/Home.jsx';
@@ -218,7 +219,7 @@ export default function App() {
     api, uid: user?.id, profile, setProfile, workspace, workspaces, role, members, reloadMembers,
     contacts, contactsState, contactsError, reloadContacts, upsertContact, removeContact,
     memberName, toast, view, setView, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion,
-    quickShot, clearQuickShot,
+    quickShot, clearQuickShot, can: (key) => featureOn(profile, key),
   }), [quickShot, clearQuickShot, user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
     reloadContacts, upsertContact, removeContact, memberName, toast, view, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion]);
 

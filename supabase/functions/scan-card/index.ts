@@ -1,6 +1,6 @@
 // scan-card: reads the front (and optional back) of a business card with
 // Claude vision and returns the contact fields for the user to review.
-import { HttpError, json, requireCaller, serve } from "../_shared/http.ts";
+import { HttpError, json, requireCaller, requireFeature, serve } from "../_shared/http.ts";
 import { structuredReply } from "../_shared/claude.ts";
 import {
   BUSINESS_CATEGORIES, CONTACT_TYPES, INDUSTRIES, JOB_FUNCTIONS, OPPORTUNITIES,
@@ -81,7 +81,7 @@ function checkImage(b64: unknown, side: string): string {
 }
 
 serve(async (req) => {
-  await requireCaller(req);
+  requireFeature(await requireCaller(req), "scan_ai", "AI card reading");
   const body = await req.json().catch(() => ({}));
   const mediaType = MEDIA_TYPES.includes(body.media_type) ? body.media_type : "image/jpeg";
 

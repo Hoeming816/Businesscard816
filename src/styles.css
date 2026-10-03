@@ -1035,3 +1035,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .minutes-row-text { color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .minutes-row-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .minutes-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font-size: 12px; }
+
+/* ---------------------------------------------------------------- Super admin feature switches */
+.feature-switches { border: 0; margin: 0; padding: 4px 0; display: grid; gap: 10px; }
+.feature-switches legend { font-weight: 650; margin-bottom: 6px; }
+.feature-switch { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.feature-switch input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); flex: none; }
+.feature-on { color: var(--ok); font-weight: 600; }
+.feature-off { color: var(--danger); font-weight: 600; }

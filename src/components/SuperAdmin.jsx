@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
 import { memberStatus } from './Team.jsx';
 import { Icon, Pill, Spinner, Tabs, formatDate } from './ui.jsx';
+import { FEATURES, featureOn } from '../features.js';
 
 export default function SuperAdmin() {
   const { api, toast } = useApp();
@@ -68,7 +69,7 @@ function Stat({ label, value }) {
 }
 
 function Accounts({ profiles, reload, toast }) {
-  const { api, uid } = useApp();
+  const { api, uid, setProfile } = useApp();
   const [q, setQ] = useState('');
   const [action, setAction] = useState(null); // { id, kind: 'suspend' | 'reset' }
   const [input, setInput] = useState('');
@@ -131,6 +132,11 @@ function Accounts({ profiles, reload, toast }) {
                       ) : (
                         <button type="button" className="btn btn-outline btn-sm" disabled={self || busy} onClick={() => run('reinstate', p)}>Reinstate</button>
                       )}
+                      <button type="button" className="btn btn-outline btn-sm" disabled={busy}
+                        aria-expanded={!!open && action.kind === 'features'}
+                        onClick={() => setAction(open && action.kind === 'features' ? null : { id: p.id, kind: 'features' })}>
+                        <Icon name="sliders" size={14} /> Features{offCount(p) ? ` (${offCount(p)} off)` : ''}
+                      </button>
                       <button type="button" className="btn btn-ghost btn-sm" disabled={self || busy}
                         title={self ? 'Change your own password from Me' : undefined}
                         onClick={() => { setAction({ id: p.id, kind: 'reset' }); setInput(''); }}>
@@ -138,7 +144,20 @@ function Accounts({ profiles, reload, toast }) {
                       </button>
                     </td>
                   </tr>
-                  {open && (
+                  {open && action.kind === 'features' && (
+                    <tr className="action-row">
+                      <td colSpan={4}>
+                        <FeatureSwitches
+                          p={p}
+                          onSaved={(saved) => {
+                            if (saved.id === uid) setProfile((me) => ({ ...me, features: saved.features }));
+                            return reload();
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  {open && action.kind !== 'features' && (
                     <tr className="action-row">
                       <td colSpan={4}>
                         <form
@@ -174,6 +193,52 @@ function Accounts({ profiles, reload, toast }) {
         </table>
       </div>
     </>
+  );
+}
+
+const offCount = (p) => FEATURES.filter((f) => !featureOn(p, f.key)).length;
+
+/** On/off switches for what one account can use. Each switch saves straight away. */
+function FeatureSwitches({ p, onSaved }) {
+  const { api, toast } = useApp();
+  const [features, setFeatures] = useState(() => ({ ...(p.features || {}) }));
+  const [saving, setSaving] = useState(null);
+
+  const toggle = async (key, on) => {
+    const before = features;
+    const next = { ...features };
+    if (on) delete next[key]; else next[key] = false;
+    setFeatures(next); // show the change straight away
+    setSaving(key);
+    try {
+      const saved = await api.adminSetFeatures(p.id, next);
+      setFeatures(saved.features || {});
+      await onSaved(saved);
+    } catch (e) {
+      setFeatures(before);
+      toast(e.message, 'error');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <fieldset className="feature-switches">
+      <legend>Features for @{p.username}</legend>
+      {FEATURES.map((f) => {
+        const on = features[f.key] !== false;
+        return (
+          <label key={f.key} className="feature-switch">
+            <input type="checkbox" role="switch" checked={on} disabled={saving !== null} onChange={(e) => toggle(f.key, e.target.checked)} />
+            <span>
+              <strong>{f.label}</strong> {saving === f.key ? <span className="muted small">Saving…</span> : <span className={`small ${on ? 'feature-on' : 'feature-off'}`}>{on ? 'On' : 'Off'}</span>}
+              <span className="help block">{f.help}</span>
+            </span>
+          </label>
+        );
+      })}
+      <p className="help">Changes take effect the next time they open the app. AI, sharing and recording are also blocked on the server when switched off.</p>
+    </fieldset>
   );
 }
 
