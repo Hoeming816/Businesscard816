@@ -3,7 +3,7 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import { clock, isMinutes, meetingTimes, minutesColumns, minutesRow, normaliseMinutes, recordedAt, shareOrCopy, shareText } from '../minutes.js';
+import { clock, earlierActions, isMinutes, meetingTimes, minutesColumns, minutesRow, normaliseMinutes, outstanding, recordedAt, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
@@ -129,7 +129,17 @@ export function useEntryActions({ reload, contactFor }) {
     }
     setStage('Writing minutes…');
     const t = meetingTimes(i);
+    // Open action items from earlier meetings, for "Outstanding from previous meetings".
+    let list = [];
+    let earlier = [];
+    try {
+      list = await api.listWorkspaceInteractions(i.workspace_id);
+      earlier = earlierActions(list, i);
+    } catch {
+      // minutes still work without the follow-up section
+    }
     const ai = await api.meetingMinutes({
+      earlier_actions: earlier.map(({ meeting_type: _t, ...a }) => a),
       title: i.title || '',
       meeting_type: i.meeting_type,
       date: i.occurred_on,
@@ -138,7 +148,29 @@ export function useEntryActions({ reload, contactFor }) {
       transcript,
       contact: contact ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title } : {},
     });
-    await api.updateInteraction(i.id, minutesColumns(normaliseMinutes(ai)));
+    const followUp = outstanding(i, earlier, ai.follow_up || []);
+    await api.updateInteraction(i.id, minutesColumns(normaliseMinutes({ ...ai, follow_up: followUp })));
+    // Items this meeting says are done are ticked off in the meeting they came from.
+    await markDone(list, followUp.filter((f) => f.state === 'Completed').map((f) => f.ref));
+  };
+
+  const markDone = async (list, refs) => {
+    const byMeeting = new Map();
+    for (const ref of refs) {
+      const [id, k] = ref.split(':');
+      byMeeting.set(id, [...(byMeeting.get(id) || []), Number(k)]);
+    }
+    for (const [id, ks] of byMeeting) {
+      try {
+        const row = list.find((x) => x.id === id);
+        if (!row?.minutes) continue;
+        const m = normaliseMinutes(row.minutes);
+        m.action_items = m.action_items.map((a, k) => (ks.includes(k) ? { ...a, status: 'Done' } : a));
+        await api.updateInteraction(id, minutesColumns(m));
+      } catch {
+        // leave it open; it can be ticked by hand
+      }
+    }
   };
 
   // Recording -> transcript -> minutes (Claude) -> a new Note next to it.

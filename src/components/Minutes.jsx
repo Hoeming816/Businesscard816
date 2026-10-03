@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
-import { hasMinutes, isMinutes } from '../minutes.js';
+import { allActions, hasMinutes, isMinutes, minutesColumns, normaliseMinutes } from '../minutes.js';
 import { MEETING_TYPES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
@@ -8,7 +8,7 @@ import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
 import MeetingView from './MeetingView.jsx';
-import { Icon, EmptyState, Spinner, ConfirmButton, formatDate, formatDuration } from './ui.jsx';
+import { Icon, EmptyState, Spinner, ConfirmButton, Pill, formatDate, formatDuration } from './ui.jsx';
 
 const SHOW = [
   { value: 'all', label: 'All' },
@@ -29,6 +29,7 @@ export default function Minutes() {
   const [open, setOpen] = useState(null); // contact id
   const [expanded, setExpanded] = useState(null); // entry id
   const [recording, setRecording] = useState(false);
+  const [view, setView] = useState('meetings'); // meetings | followups
 
   const load = useCallback(async () => {
     try {
@@ -55,6 +56,7 @@ export default function Minutes() {
   }, [items, show, q, byId]);
 
   const contact = open ? byId.get(open) : null;
+  const openCount = useMemo(() => allActions(items, todayISO()).filter((a) => a.status !== 'Done').length, [items]);
   const { making, stage, makeMinutes, share, removeRecording, remove } = useEntryActions({ reload: load, contactFor: (i) => byId.get(i.contact_id) || null });
 
   return (
@@ -62,9 +64,17 @@ export default function Minutes() {
       <div className="results-head">
         <div className="results-title-row">
           <h1 id="minutes-title" className="h1">Meeting minutes</h1>
-          <span className="result-count mono" aria-live="polite">{items ? `${rows.length} of ${items.length}` : ''}</span>
+          <span className="result-count mono" aria-live="polite">{items && view === 'meetings' ? `${rows.length} of ${items.length}` : ''}</span>
         </div>
-        {can('meeting') && !recording && (
+        {can('meeting') && (
+          <div className="chips view-switch" role="group" aria-label="View">
+            <button type="button" className={`chip ${view === 'meetings' ? 'is-on' : ''}`} aria-pressed={view === 'meetings'} onClick={() => setView('meetings')}>Meetings</button>
+            <button type="button" className={`chip ${view === 'followups' ? 'is-on' : ''}`} aria-pressed={view === 'followups'} onClick={() => setView('followups')}>
+              Follow-ups{openCount > 0 && <span className="count-badge">{openCount}</span>}
+            </button>
+          </div>
+        )}
+        {view === 'meetings' && can('meeting') && !recording && (
           <button type="button" className="btn btn-primary btn-lg record-meeting-btn" onClick={() => setRecording(true)}>
             <Icon name="plus" size={18} /> New Recording
           </button>
@@ -81,7 +91,7 @@ export default function Minutes() {
             }}
           />
         )}
-        <div className="toolbar">
+        {view === 'meetings' && <div className="toolbar">
           <div className="input-icon search">
             <Icon name="search" size={17} />
             <input type="search" placeholder="Search minutes, notes, contact or company…" aria-label="Search meeting minutes" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -91,9 +101,14 @@ export default function Minutes() {
               <button key={s.value} type="button" className={`chip ${show === s.value ? 'is-on' : ''}`} aria-pressed={show === s.value} onClick={() => setShow(s.value)}>{s.label}</button>
             ))}
           </div>
-        </div>
+        </div>}
       </div>
 
+      {view === 'followups' && items && (
+        <FollowUps items={items} byId={byId} onChanged={load} onOpen={(id) => { setView('meetings'); setShow('all'); setQ(''); setExpanded(id); }} />
+      )}
+
+      {view === 'meetings' && <>
       {items === null && <div className="loading-block"><Spinner /> Loading meeting minutes…</div>}
       {error && <p className="notice notice-error" role="alert">{error}</p>}
       {items && !rows.length && !error && (
@@ -185,6 +200,8 @@ export default function Minutes() {
           })}
         </ul>
       )}
+
+      </>}
 
       {contact && <ContactDetail contact={contact} initialTab="notes" onClose={() => { setOpen(null); load(); }} />}
     </section>
@@ -287,6 +304,84 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
         <div className="form-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>{last ? 'Discard' : 'Cancel'}</button>
         </div>
+      )}
+    </div>
+  );
+}
+
+const FU_SHOW = [
+  { value: 'open', label: 'Open' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'soon', label: 'Due soon' },
+  { value: 'done', label: 'Completed' },
+];
+const FU_PILL = { overdue: ['danger', 'Overdue'], soon: ['warn', 'Due soon'], done: ['ok', 'Completed'] };
+
+/** Action items from every meeting, to follow up: open, overdue, due soon or completed. */
+function FollowUps({ items, byId, onChanged, onOpen }) {
+  const { api, uid, role, toast } = useApp();
+  const [show, setShow] = useState('open');
+  const today = todayISO();
+  const all = useMemo(() => allActions(items, today), [items, today]);
+  const count = (v) => all.filter((a) => (v === 'open' ? a.status !== 'Done' : a.state === v)).length;
+  const rows = all
+    .filter((a) => (show === 'open' ? a.status !== 'Done' : a.state === show))
+    .sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+
+  const setStatus = async (a, done) => {
+    const m = normaliseMinutes(a.meeting.minutes);
+    m.action_items = m.action_items.map((x, k) => (k === a.index ? { ...x, status: done ? 'Done' : 'Open' } : x));
+    try {
+      await api.updateInteraction(a.meeting.id, minutesColumns(m));
+      await onChanged();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  return (
+    <div className="followups">
+      <div className="chips" role="group" aria-label="Show">
+        {FU_SHOW.map((s) => (
+          <button key={s.value} type="button" className={`chip ${show === s.value ? 'is-on' : ''}`} aria-pressed={show === s.value} onClick={() => setShow(s.value)}>
+            {s.label} <span className="muted">{count(s.value)}</span>
+          </button>
+        ))}
+      </div>
+      {!rows.length && (
+        <EmptyState icon="check" title={all.length ? 'Nothing here' : 'No action items yet'}>
+          {all.length ? 'Try another filter.' : 'Action items from your meeting minutes appear here, so nothing agreed gets forgotten.'}
+        </EmptyState>
+      )}
+      {rows.length > 0 && (
+        <ul className="actions-list">
+          {rows.map((a) => {
+            const c = byId.get(a.meeting.contact_id);
+            const pill = FU_PILL[a.state];
+            return (
+              <li key={`${a.meeting.id}:${a.index}`} className={a.status === 'Done' ? 'is-done' : ''}>
+                {canEditInteraction(a.meeting, c, role, uid) && (
+                  <label className="action-check">
+                    <input type="checkbox" checked={a.status === 'Done'} onChange={(e) => setStatus(a, e.target.checked)} />
+                    <span className="sr-only">Done: {a.action}</span>
+                  </label>
+                )}
+                <div className="action-body">
+                  <strong className="action-text">{a.action}</strong>
+                  <span className="action-meta small">
+                    <span><Icon name="user" size={12} /> {a.assigned_to || 'Not assigned'}</span>
+                    <span><Icon name="calendar" size={12} /> {a.due ? formatDate(a.due) : 'No due date'}</span>
+                    <Pill tone={a.priority === 'High' ? 'hot' : 'neutral'}>{a.priority}</Pill>
+                    {pill ? <Pill tone={pill[0]}>{pill[1]}</Pill> : <Pill>Open</Pill>}
+                  </span>
+                  <button type="button" className="link small fu-from" onClick={() => onOpen(a.meeting.id)}>
+                    From {a.meeting.title || a.meeting.meeting_type}, {formatDate(a.meeting.occurred_on)}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

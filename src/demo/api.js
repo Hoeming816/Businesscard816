@@ -449,7 +449,7 @@ export async function summarise({ contact, today, notes, transcript }) {
   };
 }
 
-export async function meetingMinutes({ meeting_type, date }) {
+export async function meetingMinutes({ meeting_type, date, earlier_actions = [] }) {
   needFeature('meeting', 'Meeting');
   await sleep(1800);
   const d = date || todayISO();
@@ -482,6 +482,9 @@ export async function meetingMinutes({ meeting_type, date }) {
     issues: ['Client approval of the revised layout could delay installation.'],
     next_steps: ['Confirm fibre delivery dates with Supplier A.'],
     next_meeting: addDays(d, 7),
+    follow_up: earlier_actions.slice(0, 2).map((a, k) => (k === 0
+      ? { ref: a.ref, status: 'completed', note: 'Reported done at this meeting.' }
+      : { ref: a.ref, status: 'discussed', note: 'Still in progress.' })),
   };
 }
 

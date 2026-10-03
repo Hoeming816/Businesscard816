@@ -78,7 +78,7 @@ const list = { type: "array", items: { type: "string" } };
 const MINUTES_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["quick_summary", "chairperson", "attendees", "location", "agenda", "discussion", "decisions", "action_items", "issues", "next_steps", "next_meeting"],
+  required: ["quick_summary", "chairperson", "attendees", "location", "agenda", "discussion", "decisions", "action_items", "issues", "next_steps", "next_meeting", "follow_up"],
   properties: {
     quick_summary: list,
     chairperson: { type: "string" },
@@ -112,6 +112,19 @@ const MINUTES_SCHEMA = {
     issues: list,
     next_steps: list,
     next_meeting: { type: "string" },
+    follow_up: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["ref", "status", "note"],
+        properties: {
+          ref: { type: "string" },
+          status: { type: "string", enum: ["completed", "discussed"] },
+          note: { type: "string" },
+        },
+      },
+    },
   },
 };
 
@@ -129,6 +142,7 @@ Return:
 - issues: unresolved issues, risks and concerns that need follow-up.
 - next_steps: what happens next, beyond the individual action items.
 - next_meeting: when the next meeting is, as said (a date as YYYY-MM-DD when one was given); empty string if not mentioned.
+- follow_up: for each open action item from earlier meetings (listed in <earlier_actions>, each with a ref) that this meeting talked about: its ref, status "completed" when the meeting says it is done, otherwise "discussed", and a short note of what was said about it. Leave out items the meeting did not mention. Empty list if there are none.
 
 The meeting type tells you what to concentrate on; give those things the most care and detail.
 
@@ -138,11 +152,27 @@ Write in the language the meeting was held in. If it is in Chinese, write in Chi
 
 Only use what is in the transcript and notes; never invent names, dates, figures or decisions. Leave a field empty rather than guess. A transcript from speech recognition may contain recognition errors, so read it for meaning.`;
 
+type Earlier = { ref: string; action: string; assigned_to?: string; due?: string; meeting?: string; date?: string };
+
+// Open action items from earlier meetings, for the AI to check off.
+function earlierBlock(body: Record<string, unknown>) {
+  const items = (Array.isArray(body.earlier_actions) ? body.earlier_actions : []).slice(0, 60) as Earlier[];
+  if (!items.length) return { text: "", refs: new Set<string>() };
+  const lines = items.map((a) =>
+    `- ref ${String(a.ref).slice(0, 80)}: ${String(a.action ?? "").slice(0, 300)}` +
+    `${a.assigned_to ? ` (assigned to ${String(a.assigned_to).slice(0, 80)})` : ""}` +
+    `${a.due ? `, due ${String(a.due).slice(0, 10)}` : ""}` +
+    `${a.meeting ? `, from "${String(a.meeting).slice(0, 120)}"` : ""}${a.date ? ` on ${String(a.date).slice(0, 10)}` : ""}`
+  );
+  return { text: `\n\n<earlier_actions>\n${lines.join("\n")}\n</earlier_actions>`, refs: new Set(items.map((a) => String(a.ref))) };
+}
+
 type Minutes = {
   quick_summary: string[]; chairperson: string; attendees: string[]; location: string; agenda: string[];
   discussion: { topic: string; points: string[] }[]; decisions: string[];
   action_items: { action: string; assigned_to: string; due: string; priority: string }[];
   issues: string[]; next_steps: string[]; next_meeting: string;
+  follow_up: { ref: string; status: string; note: string }[];
 };
 
 const clean = (a: unknown) => (Array.isArray(a) ? a.map((x) => String(x ?? "").trim()).filter(Boolean) : []);
@@ -169,9 +199,10 @@ function requireText(body: Record<string, unknown>) {
 }
 
 async function minutes(body: Record<string, unknown>) {
+  const earlier = earlierBlock(body);
   const r = await structuredReply<Minutes>({
     system: MINUTES_SYSTEM,
-    content: [{ type: "text", text: `${meetingHeader(body)}\n\n${requireText(body)}` }],
+    content: [{ type: "text", text: `${meetingHeader(body)}\n\n${requireText(body)}${earlier.text}` }],
     schema: MINUTES_SCHEMA,
     effort: "high",
   });
@@ -196,6 +227,9 @@ async function minutes(body: Record<string, unknown>) {
     issues: clean(r.issues),
     next_steps: clean(r.next_steps),
     next_meeting: String(r.next_meeting ?? "").trim(),
+    follow_up: (Array.isArray(r.follow_up) ? r.follow_up : [])
+      .filter((f) => earlier.refs.has(String(f?.ref)))
+      .map((f) => ({ ref: String(f.ref), status: f.status === "completed" ? "completed" : "discussed", note: String(f.note ?? "").trim() })),
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { actionLine, decisionLabel, dueState, hasMinutes, isMinutes, lineTime, minutesColumns, minutesRow, minutesText, normaliseMinutes, shareOrCopy, shareText } from './minutes.js';
+import { actionLine, allActions, earlierActions, outstanding, decisionLabel, dueState, hasMinutes, isMinutes, lineTime, minutesColumns, minutesRow, minutesText, normaliseMinutes, shareOrCopy, shareText } from './minutes.js';
 
 const rec = { kind: 'Meeting', title: 'Recorded conversation', occurred_on: '2026-10-03' };
 const ai = { summary: '讨论了网络升级。', key_points: ['两个站点', 'Wi-Fi 不稳定'], action_items: ['Send quote'] };
@@ -100,5 +100,40 @@ describe('typed meeting minutes', () => {
     expect(t).toContain('ACTION ITEMS\n1. Submit BOM · Assigned to: Peter');
     expect(t).toContain('NEXT MEETING\n2026-10-10');
     expect(shareText({ minutes: m, occurred_on: '2026-10-03' }, null, (d) => d)).toMatch(/^MEETING MINUTES/);
+  });
+});
+
+describe('follow-up tracking', () => {
+  const mk = (id, date, type, actions) => ({ id, occurred_on: date, created_at: `${date}T09:00:00Z`, meeting_type: type, title: id, minutes: normaliseMinutes({ action_items: actions }) });
+  const items = [
+    mk('mon', '2026-09-28', 'Project Meeting', [
+      { action: 'Submit BOM', assigned_to: 'Peter', due: '2026-09-30', priority: 'High' },
+      { action: 'Site survey', assigned_to: 'Engineering', due: '2026-10-10' },
+      { action: 'Old task', status: 'Done' },
+    ]),
+    mk('sales', '2026-09-29', 'Sales Meeting', [{ action: 'Client approval', assigned_to: 'Sales' }]),
+    mk('later', '2026-10-05', 'Project Meeting', [{ action: 'Future thing' }]),
+  ];
+  const now = { id: 'fri', occurred_on: '2026-10-02', created_at: '2026-10-02T09:00:00Z', meeting_type: 'Project Meeting' };
+
+  it('lists every action with its due state', () => {
+    const all = allActions(items, '2026-10-02');
+    expect(all).toHaveLength(5);
+    expect(all[0]).toMatchObject({ action: 'Submit BOM', index: 0, state: 'overdue' });
+    expect(all[2].state).toBe('done');
+  });
+
+  it('offers only open items from earlier meetings', () => {
+    const e = earlierActions(items, now);
+    expect(e.map((a) => a.ref)).toEqual(['sales:0', 'mon:0', 'mon:1']);
+    expect(e[1]).toMatchObject({ action: 'Submit BOM', meeting: 'mon', date: '2026-09-28' });
+  });
+
+  it('marks earlier items Completed, Overdue or Pending', () => {
+    const out = outstanding(now, earlierActions(items, now), [{ ref: 'mon:1', status: 'completed', note: 'Done' }, { ref: 'sales:0', status: 'discussed', note: '' }]);
+    expect(out.map((f) => [f.action, f.state])).toEqual([['Client approval', 'Pending'], ['Submit BOM', 'Overdue'], ['Site survey', 'Completed']]);
+    // an unmentioned item from another meeting type is left out
+    expect(outstanding(now, earlierActions(items, now), []).map((f) => f.action)).toEqual(['Submit BOM', 'Site survey']);
+    expect(normaliseMinutes({ follow_up: out }).follow_up).toHaveLength(3);
   });
 });
