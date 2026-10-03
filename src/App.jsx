@@ -225,7 +225,7 @@ export default function App() {
       <div className={`shell view-${view}`}>
         <a className="skip-link" href="#main">Skip to content</a>
         <header className="topbar">
-          <button type="button" className="logo-btn" onClick={() => go('contacts')} aria-label="Cardfile, go to contacts">
+          <button type="button" className="logo-btn" onClick={() => go('contacts')} aria-label="CardFlow, go to contacts">
             <Logo />
           </button>
           <WorkspaceSwitcher />

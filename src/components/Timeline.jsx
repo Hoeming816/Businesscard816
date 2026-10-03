@@ -186,7 +186,7 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved })
       toast('Transcript ready');
     } catch (e) {
       setTranscribeMsg(e.code === 'not_configured'
-        ? 'Server transcription is not set up for Cardfile yet (it needs an OpenAI API key). Use the live transcript or type your notes instead.'
+        ? 'Server transcription is not set up for CardFlow yet (it needs an OpenAI API key). Use the live transcript or type your notes instead.'
         : `Transcription failed: ${e.message}`);
     } finally {
       setTranscribing(false);

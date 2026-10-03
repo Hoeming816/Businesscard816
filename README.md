@@ -1,4 +1,4 @@
-# Cardfile
+# CardFlow by Aspencom
 
 Scan, file and follow up on business cards. Photograph the front and back of a card, let Claude read it, review the details, and file the contact in a shared team database, or keep it private. Every contact keeps a timeline of meetings, calls and recorded conversations, with AI summaries.
 

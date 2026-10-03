@@ -66,7 +66,7 @@ export function Icon({ name, size = 18, className = '', strokeWidth = 1.8, title
   );
 }
 
-export function Logo({ compact = false }) {
+export function Logo({ compact = false, byline = false }) {
   return (
     <span className="logo">
       <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
@@ -75,7 +75,12 @@ export function Logo({ compact = false }) {
         <rect x="7" y="15" width="10" height="2.6" rx="1.1" fill="var(--accent-ink)" />
         <rect x="7" y="20" width="15" height="2" rx="1" fill="var(--accent-ink)" opacity=".7" />
       </svg>
-      {!compact && <span className="logo-word">Cardfile</span>}
+      {!compact && (
+        <span className="logo-text">
+          <span className="logo-word">CardFlow</span>
+          {byline && <span className="logo-by">by Aspencom</span>}
+        </span>
+      )}
     </span>
   );
 }

@@ -121,7 +121,7 @@ export default function Scan() {
     <div className="page scan">
       <div className="page-head">
         <h1 className="h1">Scan card</h1>
-        <p className="muted">Add the front (and back, if it has details), then let Cardfile read it, or type the details yourself.</p>
+        <p className="muted">Add the front (and back, if it has details), then let CardFlow read it, or type the details yourself.</p>
       </div>
 
       <div className="scan-grid">

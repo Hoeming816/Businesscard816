@@ -1,4 +1,4 @@
-// Shared helpers for Cardfile edge functions.
+// Shared helpers for CardFlow edge functions.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export const corsHeaders = {
