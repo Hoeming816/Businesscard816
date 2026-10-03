@@ -484,7 +484,7 @@ export async function adminListProfiles() {
   return out;
 }
 
-/** action: 'suspend' | 'reinstate' | 'reset_password'; extra: { reason?, password? } */
+/** action: 'suspend' | 'reinstate' | 'reset_password' | 'delete'; extra: { reason?, password?, confirm_username? } */
 export async function adminUserAction(action, userId, extra = {}) {
   await invoke('admin-users', { action, user_id: userId, ...extra });
 }

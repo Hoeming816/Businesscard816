@@ -457,9 +457,32 @@ export async function adminSetFeatures(userId, features) {
 export async function adminUserAction(action, userId, extra = {}) {
   await sleep(300);
   requireSuper();
+  if (userId === uid() && action === 'delete') throw new Error('You cannot delete your own account.');
   if (userId === uid() && action !== 'reset_password') throw new Error('You cannot suspend yourself.');
   const p = profile(userId);
   if (!p) throw new Error('No such account.');
+  if (action === 'delete') {
+    if (String(extra.confirm_username || '').trim().toLowerCase() !== p.username) throw new Error(`Type ${p.username} to confirm.`);
+    if (p.is_super_admin && db.profiles.filter((x) => x.is_super_admin).length <= 1) throw new Error('You cannot delete the last super admin.');
+    // Mirrors admin-users: shared workspaces pass to you, everything else of theirs goes.
+    const gone = new Set();
+    for (const w of db.workspaces.filter((x) => x.owner_id === userId)) {
+      if (db.members.some((m) => m.workspace_id === w.id && m.user_id !== userId)) {
+        w.owner_id = uid();
+        const mine = db.members.find((m) => m.workspace_id === w.id && m.user_id === uid());
+        if (mine) Object.assign(mine, { role: 'admin', status: 'active' });
+        else db.members.push({ workspace_id: w.id, user_id: uid(), role: 'admin', status: 'active', created_at: now() });
+      } else gone.add(w.id);
+    }
+    const lost = new Set(db.contacts.filter((c) => c.created_by === userId || gone.has(c.workspace_id)).map((c) => c.id));
+    db.interactions = db.interactions.filter((i) => i.created_by !== userId && !lost.has(i.contact_id) && !gone.has(i.workspace_id));
+    db.contacts = db.contacts.filter((c) => !lost.has(c.id));
+    db.shares = db.shares.filter((x) => x.sender_id !== userId && x.recipient_id !== userId);
+    db.members = db.members.filter((m) => m.user_id !== userId && !gone.has(m.workspace_id));
+    db.workspaces = db.workspaces.filter((w) => !gone.has(w.id));
+    db.profiles = db.profiles.filter((x) => x.id !== userId);
+    return;
+  }
   if (action === 'suspend') Object.assign(p, { status: 'suspended', suspended_reason: extra.reason || null });
   else if (action === 'reinstate') Object.assign(p, { status: 'active', suspended_reason: null });
   else if (action === 'reset_password') {

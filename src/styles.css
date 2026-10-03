@@ -1061,3 +1061,4 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .minutes-del { position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; justify-content: flex-end; pointer-events: none; }
 .minutes-del > * { pointer-events: auto; }
 .minutes-del .confirm-inline { background: var(--surface); padding: 4px; border-radius: 10px; box-shadow: 0 2px 10px rgba(16, 24, 40, .12); flex-wrap: nowrap; }
+.help.danger-help { color: var(--danger-ink); font-size: 13px; max-width: 60ch; }
