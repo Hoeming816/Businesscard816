@@ -36,7 +36,7 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 # supabase secrets set AI_GATEWAY_API_KEY=...             # see "Using Vercel AI Gateway" below
 # optional:
 supabase secrets set ANTHROPIC_MODEL=claude-sonnet-5-5     # this is the default
-supabase secrets set OPENAI_API_KEY=sk-...                 # enables "Transcribe recording"
+supabase secrets set OPENAI_API_KEY=sk-...                 # only without AI_GATEWAY_API_KEY: enables "Transcribe recording"
 
 supabase functions deploy scan-card meeting-notes admin-users
 ```
@@ -90,7 +90,7 @@ Every push to `main` then deploys. Netlify and Cloudflare Pages work the same wa
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | `.env` / hosting env vars |
 | `VITE_USERNAME_DOMAIN` (default `users.cardfile.app`) | `.env` / hosting env vars. Don't change it once people have signed up, because their logins are tied to it. |
 | `ANTHROPIC_API_KEY` or `AI_GATEWAY_API_KEY` (one is required), `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`), `AI_GATEWAY_MODEL` (optional) | Edge function secrets |
-| `OPENAI_API_KEY` (optional) | Edge function secret |
+| `OPENAI_API_KEY` (optional; transcription when there is no `AI_GATEWAY_API_KEY`, and a fallback), `AI_GATEWAY_TRANSCRIBE_MODEL` (default `openai/whisper-1`) | Edge function secrets |
 | Filter value lists | `src/taxonomy.js`. Run `npm run sync:taxonomy` and redeploy `scan-card` after editing. `npm run build` syncs automatically. |
 
 ## Scripts
