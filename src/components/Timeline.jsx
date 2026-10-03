@@ -3,7 +3,6 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import Recorder, { useSpeechLanguage, whisperLang } from './Recorder.jsx';
 import { isMinutes, minutesRow, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
@@ -13,7 +12,7 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
   const { api, uid, role, memberName, toast, can } = useApp();
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(null); // null | 'new' | 'record' | interaction
+  const [editing, setEditing] = useState(null); // null | 'new' | interaction
   const [making, setMaking] = useState(null); // id of the recording entry minutes are being made for
 
   const loadItems = useCallback(async () => {
@@ -32,13 +31,6 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
     setEditing(null);
     await loadItems();
     if (bumped) await onContactChanged();
-  };
-
-  // A recording is saved as soon as Stop is tapped; the editor stays open on that entry.
-  const onAutoSaved = async (saved) => {
-    setEditing(saved);
-    await loadItems();
-    await onContactChanged();
   };
 
   const removeRecording = async (i) => {
@@ -113,21 +105,14 @@ export default function Timeline({ contact, canAdd, onContactChanged }) {
           <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
             <Icon name="plus" size={16} /> Add meeting or note
           </button>
-          {can('recording') && (
-            <button type="button" className="btn btn-outline" onClick={() => setEditing('record')}>
-              <Icon name="mic" size={16} /> Record conversation
-            </button>
-          )}
         </div>
       )}
       {editing && (
         <InteractionEditor
           contact={contact}
           existing={typeof editing === 'object' ? editing : null}
-          autoRecord={editing === 'record'}
           onCancel={() => setEditing(null)}
           onSaved={onSaved}
-          onAutoSaved={onAutoSaved}
         />
       )}
 
@@ -244,10 +229,9 @@ function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteR
   );
 }
 
-function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, onAutoSaved }) {
+function InteractionEditor({ contact, existing, onCancel, onSaved }) {
   const { api, toast, upsertContact, can } = useApp();
   const ai = can('ai_minutes');
-  const [lang, setLang] = useSpeechLanguage();
   const [f, setF] = useState(() => ({
     kind: existing?.kind || 'Meeting',
     occurred_on: existing?.occurred_on || todayISO(),
@@ -257,9 +241,6 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
     summary: existing?.summary || '',
     action_items: existing?.action_items || [],
   }));
-  const [recording, setRecording] = useState(null); // { blob, ext, duration, url }
-  const [transcribing, setTranscribing] = useState(false);
-  const [transcribeMsg, setTranscribeMsg] = useState('');
   const [summarising, setSummarising] = useState(false);
   const [suggest, setSuggest] = useState(null); // { follow_up_on, lead_status }
   const [apply, setApply] = useState(true);
@@ -267,72 +248,8 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
   const { ensureSigned, signed } = useApp();
 
   useEffect(() => { if (existing?.audio_path) ensureSigned('recordings', [existing.audio_path]); }, [existing, ensureSigned]);
-  useEffect(() => () => { if (recording?.url) URL.revokeObjectURL(recording.url); }, [recording]);
 
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
-
-  const [recSaving, setRecSaving] = useState(false);
-  const [recError, setRecError] = useState('');
-
-  // Save the recording straight away so it can't be lost; notes can be added after.
-  const saveRecording = async (r, fields) => {
-    setRecSaving(true);
-    setRecError('');
-    try {
-      let saved = existing;
-      if (!saved) {
-        saved = await api.insertInteraction({
-          kind: fields.kind,
-          occurred_on: fields.occurred_on || todayISO(),
-          title: fields.title.trim() || 'Recorded conversation',
-          notes: fields.notes.trim() || null,
-          transcript: fields.transcript.trim() || null,
-          contact_id: contact.id,
-          workspace_id: contact.workspace_id,
-        });
-      }
-      const path = await api.uploadRecording(contact.workspace_id, contact.id, saved.id, r.blob, r.ext);
-      const patch = { audio_path: path, duration_sec: r.duration };
-      if (r.liveTranscript && !existing) patch.transcript = fields.transcript.trim() || null;
-      saved = await api.updateInteraction(saved.id, patch);
-      if (existing?.audio_path && existing.audio_path !== path) {
-        api.removeStorageObjects('recordings', [existing.audio_path]).catch(() => {});
-      }
-      setRecording((cur) => (cur === r ? { ...r, saved: true } : cur));
-      if (!fields.title.trim() && !existing) setF((x) => ({ ...x, title: 'Recorded conversation' }));
-      toast('Saved. Recording added to the timeline.');
-      await onAutoSaved(saved);
-    } catch (e) {
-      setRecError(`The recording was not saved: ${e.message}`);
-      toast(`The recording was not saved: ${e.message}`, 'error');
-    } finally {
-      setRecSaving(false);
-    }
-  };
-
-  const onRecorded = (r) => {
-    setRecording(r);
-    setTranscribeMsg('');
-    const fields = r.liveTranscript ? { ...f, transcript: f.transcript ? `${f.transcript}\n\n${r.liveTranscript}` : r.liveTranscript } : f;
-    if (r.liveTranscript) setF(fields);
-    saveRecording(r, fields);
-  };
-
-  const doTranscribe = async () => {
-    setTranscribing(true);
-    setTranscribeMsg('');
-    try {
-      const text = await api.transcribe(recording.blob, whisperLang(lang), recording.ext);
-      setF((x) => ({ ...x, transcript: text }));
-      toast('Transcript ready');
-    } catch (e) {
-      setTranscribeMsg(e.code === 'not_configured'
-        ? 'Server transcription is not set up for Nomiqo yet (it needs the AI Gateway key). Use the live transcript or type your notes instead.'
-        : `Transcription failed: ${e.message}`);
-    } finally {
-      setTranscribing(false);
-    }
-  };
 
   const doSummarise = async () => {
     if (!f.notes.trim() && !f.transcript.trim()) {
@@ -370,24 +287,11 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
       transcript: f.transcript.trim() || null,
       summary: f.summary.trim() || null,
       action_items: f.action_items.map((a) => a.trim()).filter(Boolean),
-      ...(recording ? { duration_sec: recording.duration } : {}),
     };
     try {
-      let saved = existing
+      const saved = existing
         ? await api.updateInteraction(existing.id, row)
         : await api.insertInteraction({ ...row, contact_id: contact.id, workspace_id: contact.workspace_id });
-
-      if (recording && !recording.saved) {
-        try {
-          const path = await api.uploadRecording(contact.workspace_id, contact.id, saved.id, recording.blob, recording.ext);
-          if (existing?.audio_path && existing.audio_path !== path) {
-            await api.removeStorageObjects('recordings', [existing.audio_path]).catch(() => {});
-          }
-          saved = await api.updateInteraction(saved.id, { audio_path: path });
-        } catch (err) {
-          toast(`Entry saved, but the recording did not upload: ${err.message}`, 'error');
-        }
-      }
 
       let bumped = row.kind !== 'Note';
       if (suggest && apply) {
@@ -440,30 +344,13 @@ function InteractionEditor({ contact, existing, autoRecord, onCancel, onSaved, o
         <textarea id="int-notes" rows={4} value={f.notes} onChange={set('notes')} />
       </div>
 
-      <div className="field">
-        <span className="label">Recording</span>
-        {existingAudio && !recording && (
-          <div className="entry-audio"><audio controls src={existingAudio} aria-label="Saved recording" /> <span className="muted small">Recording a new one replaces it.</span></div>
-        )}
-        {recording ? (
-          <div className="rec-done">
-            <audio controls src={recording.url} aria-label="New recording" />
-            <span className="mono small">{formatDuration(recording.duration)}</span>
-            {ai && (
-              <button type="button" className="btn btn-outline btn-sm" onClick={doTranscribe} disabled={transcribing}>
-                {transcribing ? <><Spinner /> Transcribing…</> : <><Icon name="edit" size={14} /> Transcribe recording</>}
-              </button>
-            )}
-            {recSaving ? <span className="small muted"><Spinner /> Saving recording…</span>
-              : recording.saved ? <span className="small rec-saved"><Icon name="check" size={14} /> Saved</span>
-                : <button type="button" className="btn btn-outline btn-sm" onClick={() => saveRecording(recording, f)}>Try saving again</button>}
-          </div>
-        ) : can('recording') ? (
-          <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} autoStart={autoRecord} />
-        ) : !existingAudio && <span className="muted small">Recording is turned off for your account.</span>}
-        {recError && <p className="form-error" role="alert">{recError}</p>}
-        {transcribeMsg && <p className="notice notice-warn">{transcribeMsg}</p>}
-      </div>
+      {/* New recordings can no longer be made from Notes & meetings; earlier ones stay playable. */}
+      {existingAudio && (
+        <div className="field">
+          <span className="label">Recording</span>
+          <div className="entry-audio"><audio controls src={existingAudio} aria-label="Saved recording" /></div>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="int-transcript">Transcript</label>
