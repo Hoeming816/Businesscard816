@@ -10,6 +10,7 @@ const ROLE_HELP = {
 };
 
 export function memberStatus(m) {
+  if (m.profile_status === 'deleted') return { label: 'Account deleted', tone: 'danger' };
   if (m.profile_status === 'suspended') return { label: 'Account suspended', tone: 'danger' };
   if (m.status === 'revoked') return { label: 'Access revoked', tone: 'warn' };
   return { label: 'Active', tone: 'ok' };
@@ -89,7 +90,7 @@ export default function Team() {
     if (b.user_id === workspace.owner_id) return 1;
     return ROLES.indexOf(a.role) - ROLES.indexOf(b.role) || (a.full_name || a.username).localeCompare(b.full_name || b.username);
   });
-  const activeCount = members.filter((m) => m.status === 'active' && m.profile_status !== 'suspended').length;
+  const activeCount = members.filter((m) => m.status === 'active' && m.profile_status === 'active').length;
 
   return (
     <div className="page narrow team">
@@ -154,7 +155,7 @@ export default function Team() {
             const st = memberStatus(m);
             const locked = owner || !isAdmin;
             return (
-              <li key={m.user_id} className={`member ${m.status !== 'active' || m.profile_status === 'suspended' ? 'is-inactive' : ''}`}>
+              <li key={m.user_id} className={`member ${m.status !== 'active' || m.profile_status !== 'active' ? 'is-inactive' : ''}`}>
                 <Avatar name={m.full_name || m.username} size={38} />
                 <div className="member-main">
                   <span className="member-name">{m.full_name || m.username}{self && <span className="muted"> (you)</span>}</span>

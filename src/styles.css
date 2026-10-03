@@ -1062,3 +1062,10 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .minutes-del > * { pointer-events: auto; }
 .minutes-del .confirm-inline { background: var(--surface); padding: 4px; border-radius: 10px; box-shadow: 0 2px 10px rgba(16, 24, 40, .12); flex-wrap: nowrap; }
 .help.danger-help { color: var(--danger-ink); font-size: 13px; max-width: 60ch; }
+.deleted-users { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.deleted-user { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; gap: 10px; min-width: 0; }
+.deleted-user-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: baseline; }
+.deleted-user-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.deleted-user .inline-form { flex-wrap: wrap; }
+.admin-tabs { overflow-x: auto; scrollbar-width: none; }
+@media (max-width: 480px) { .admin-tabs .tab { padding-left: 8px; padding-right: 8px; gap: 5px; } }

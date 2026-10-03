@@ -165,6 +165,15 @@ select pg_temp.ok((select count(*) from public.contacts) = 0, 'suspended account
 select pg_temp.ok(public.suspension_notice('bob') = 'Left the company', 'suspension reason available to sign-in screen');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
 update public.profiles set status = 'active', suspended_reason = null where username = 'bob';
+update public.profiles set status = 'deleted', deleted_at = now() where username = 'bob';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok((select count(*) from public.contacts) = 0, 'deleted account loses all data access');
+select pg_temp.ok(public.suspension_notice('bob') = '', 'deleted account gets the blocked notice');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+update public.profiles set status = 'active', deleted_at = null where username = 'bob';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok((select count(*) from public.contacts) > 0, 'reinstated account sees its cards again');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
 update public.workspaces set status = 'suspended' where id = :'ws';
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 select pg_temp.ok((select count(*) from public.contacts) = 0, 'suspended workspace blocks its owner');
