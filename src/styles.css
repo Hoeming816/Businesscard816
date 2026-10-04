@@ -1081,6 +1081,13 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .minutes-single-head .h1 { overflow-wrap: anywhere; }
 .minutes-single-head .minutes-row-who { margin: 0; }
 .minutes-single .minutes-open { border-top: 1px solid var(--line); border-radius: 12px; }
+.meeting-filters { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
+.meeting-filters input { width: auto; min-height: 38px; }
+@media (max-width: 720px) {
+  .meeting-filters .select-inline { flex: 1 1 140px; }
+  .meeting-filters .select-inline select { width: 100%; }
+  .meeting-filters input { flex: 1 1 100%; }
+}
 .minutes-list > li { position: relative; }
 .minutes-row-tags { padding-right: 40px; }
 .minutes-del { position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; justify-content: flex-end; pointer-events: none; }

@@ -290,3 +290,13 @@ export function minutesFileName(i, formatDate = (d) => d) {
   const name = ['Minutes', i.title || i.meeting_type || 'Meeting', formatDate(i.occurred_on)].filter(Boolean).join(' - ');
   return `${name.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}.docx`;
 }
+
+/**
+ * Meeting list filter by date: `mode` is 'any', 'month' (value "2026-10")
+ * or 'day' (value "2026-10-04"). An empty value matches everything.
+ */
+export function onDate(occurredOn, mode, value) {
+  if (mode === 'any' || !value) return true;
+  const d = String(occurredOn || '');
+  return mode === 'month' ? d.slice(0, 7) === value : d.slice(0, 10) === value;
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
-import { allActions, hasMinutes, isMinutes, minutesColumns, normaliseMinutes } from '../minutes.js';
+import { allActions, hasMinutes, isMinutes, minutesColumns, normaliseMinutes, onDate } from '../minutes.js';
 import { MEETING_TYPES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
@@ -30,6 +30,10 @@ export default function Minutes() {
   const [expanded, setExpanded] = useState(null); // entry id
   const [recording, setRecording] = useState(false);
   const [view, setView] = useState('meetings'); // meetings | followups
+  const [type, setType] = useState(''); // meeting type, '' for all
+  const [dateBy, setDateBy] = useState('any'); // any | month | day
+  const [month, setMonth] = useState(() => todayISO().slice(0, 7));
+  const [day, setDay] = useState(todayISO);
 
   const load = useCallback(async () => {
     try {
@@ -48,12 +52,14 @@ export default function Minutes() {
     return (items || []).filter((i) => {
       if (show === 'minutes' && !hasMinutes(i)) return false;
       if (show === 'recordings' && !i.audio_path) return false;
+      if (type && i.meeting_type !== type) return false;
+      if (!onDate(i.occurred_on, dateBy, dateBy === 'month' ? month : day)) return false;
       if (!needle) return true;
       const c = byId.get(i.contact_id);
       return [i.title, i.kind, i.meeting_type, i.notes, i.summary, i.transcript, i.minutes && JSON.stringify(i.minutes), c?.full_name, c?.company]
         .some((v) => String(v || '').toLowerCase().includes(needle));
     });
-  }, [items, show, q, byId]);
+  }, [items, show, q, byId, type, dateBy, month, day]);
 
   const contact = open ? byId.get(open) : null;
   const openCount = useMemo(() => allActions(items, todayISO()).filter((a) => a.status !== 'Done').length, [items]);
@@ -165,6 +171,25 @@ export default function Minutes() {
               <button key={s.value} type="button" className={`chip ${show === s.value ? 'is-on' : ''}`} aria-pressed={show === s.value} onClick={() => setShow(s.value)}>{s.label}</button>
             ))}
           </div>
+          <div className="meeting-filters">
+            <label className="select-inline">
+              <span>Type</span>
+              <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Meeting type">
+                <option value="">All types</option>
+                {MEETING_TYPES.map((t) => <option key={t.value} value={t.value}>{t.value}</option>)}
+              </select>
+            </label>
+            <label className="select-inline">
+              <span>Date</span>
+              <select value={dateBy} onChange={(e) => setDateBy(e.target.value)} aria-label="Filter by date">
+                <option value="any">Any date</option>
+                <option value="month">Month</option>
+                <option value="day">Day</option>
+              </select>
+            </label>
+            {dateBy === 'month' && <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />}
+            {dateBy === 'day' && <input type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Day" />}
+          </div>
         </div>}
       </div>
 
@@ -177,7 +202,7 @@ export default function Minutes() {
       {error && <p className="notice notice-error" role="alert">{error}</p>}
       {items && !rows.length && !error && (
         <EmptyState icon="history" title={items.length ? 'Nothing matches' : 'No meeting minutes yet'}>
-          {items.length ? 'Try another search or show All.' : can('meeting') ? 'Tap New Recording to record one. Notes you add to a contact appear here too.' : 'Notes and meetings you add to a contact appear here.'}
+          {items.length ? 'Try another search, type or date, or show All.' : can('meeting') ? 'Tap New Recording to record one. Notes you add to a contact appear here too.' : 'Notes and meetings you add to a contact appear here.'}
         </EmptyState>
       )}
 
