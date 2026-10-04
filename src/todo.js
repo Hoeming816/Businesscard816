@@ -252,16 +252,20 @@ export function reminderTimes(task) {
 }
 
 /**
- * Reminders that are due now and not shown yet. One that went off while the app
- * was closed still shows if it was within `lookbackMin` minutes.
+ * Reminders that are due now and not shown yet, one per task (the latest; `keys`
+ * names every reminder it covers). One that went off while the app was closed
+ * still shows if it was within `lookbackMin` minutes.
  */
 export function dueReminders(tasks, now, shown, lookbackMin = 60) {
   const out = [];
   for (const t of tasks) {
-    for (const r of reminderTimes(t)) {
+    const due = reminderTimes(t).filter((r) => {
       const ms = now.getTime() - r.at.getTime();
-      if (ms >= 0 && ms <= lookbackMin * 60000 && !shown.has(r.key)) out.push({ task: t, ...r });
-    }
+      return ms >= 0 && ms <= lookbackMin * 60000 && !shown.has(r.key);
+    });
+    if (!due.length) continue;
+    const latest = due.reduce((a, b) => (b.at > a.at ? b : a));
+    out.push({ task: t, ...latest, keys: due.map((r) => r.key) });
   }
   return out.sort((a, b) => a.at - b.at);
 }

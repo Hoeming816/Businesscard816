@@ -139,11 +139,14 @@ describe('due dates and reminders', () => {
     const shown = new Set();
     const due = dueReminders([t], NOW, shown);
     expect(due.map((r) => r.minutes)).toEqual([15]);
-    due.forEach((r) => shown.add(r.key));
+    due.forEach((r) => r.keys.forEach((k) => shown.add(k)));
     expect(dueReminders([t], NOW, shown)).toEqual([]);
     expect(dueReminders([t], new Date(2026, 9, 4, 9, 41), shown).map((r) => r.minutes)).toEqual([0]);
     expect(dueReminders([{ ...t, due_time: '07:00' }], NOW, new Set())).toEqual([]);
     expect(dueReminders([{ ...t, status: 'done' }], new Date(2026, 9, 4, 9, 41), new Set())).toEqual([]);
+    // opened late: one message per task for the reminders it missed
+    const late = dueReminders([t], new Date(2026, 9, 4, 9, 50), new Set());
+    expect(late.map((r) => [r.minutes, r.keys.length])).toEqual([[0, 2]]);
     // no time: reminders count from 09:00
     expect(dueReminders([{ id: 't2', due_on: TODAY, reminders: [0] }], NOW, new Set()).length).toBe(1);
   });

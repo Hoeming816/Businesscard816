@@ -28,7 +28,7 @@ export default function TaskReminders() {
       if (!due.length) return;
       const today = toISODate(now);
       for (const r of due) {
-        shown.add(r.key);
+        r.keys.forEach((k) => shown.add(k));
         const body = reminderText(r.task, today);
         toast(`⏰ ${r.task.title}${body ? `: ${body.toLowerCase()}` : ''}`);
         if (canNotify() && Notification.permission === 'granted') {

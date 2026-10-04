@@ -19,12 +19,16 @@ describe('featureOn', () => {
     expect(featureOn({ features: { todo: true } }, 'todo')).toBe(true);
     expect(featureOn({ is_super_admin: true }, 'todo')).toBe(true);
   });
+  it('keeps Quick Notes off until a super admin turns it on', () => {
+    expect(featureOn({ features: {} }, 'notes')).toBe(false);
+    expect(featureOn({ features: { notes: true } }, 'notes')).toBe(true);
+  });
   it('gives super admins everything', () => {
     expect(featureOn({ is_super_admin: true, features: {} }, 'meeting')).toBe(true);
     expect(featureOn({ is_super_admin: true, features: { share: false } }, 'share')).toBe(true);
   });
   it('lists the keys the server enforces', () => {
-    expect(FEATURES.map((f) => f.key)).toEqual(['scan_ai', 'share', 'meeting', 'todo']);
+    expect(FEATURES.map((f) => f.key)).toEqual(['scan_ai', 'share', 'meeting', 'todo', 'notes']);
   });
 });
 
