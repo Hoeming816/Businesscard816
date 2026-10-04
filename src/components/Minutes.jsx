@@ -68,7 +68,7 @@ export default function Minutes() {
     return (
       <section className="minutes-page minutes-single" aria-labelledby="minutes-title">
         <button type="button" className="btn btn-ghost btn-sm minutes-back" onClick={() => setExpanded(null)}>
-          <Icon name="chevronLeft" size={16} /> All meetings
+          <Icon name="chevronLeft" size={16} /> Back
         </button>
         <div className="minutes-single-head">
           <h1 id="minutes-title" className="h1">{i.title || i.kind}</h1>
