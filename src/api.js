@@ -3,7 +3,7 @@
 // in memory. Every function either returns data or throws an Error with a
 // user-presentable message.
 
-import { supabase, USERNAME_DOMAIN, configured } from './supabase.js';
+import { supabase, USERNAME_DOMAIN, configured, setKeepSignedIn as keepSignedIn } from './supabase.js';
 
 export const isDemo = false;
 export const isConfigured = configured;
@@ -115,8 +115,14 @@ export async function usernameAvailable(username) {
   return !!data;
 }
 
+/** "Keep me signed in": call before signing in. Signing out turns it off. */
+export function setKeepSignedIn(on) {
+  keepSignedIn(on);
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
+  keepSignedIn(false);
 }
 
 // ---------------------------------------------------------------------------
