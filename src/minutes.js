@@ -1,7 +1,23 @@
 // Meeting minutes made by AI from a saved recording: how they are stored as a
 // Note, and the plain text that goes out through the phone's share sheet.
 
+import { load, save } from './storage.js';
+
 export const MINUTES_PREFIX = 'Minutes: ';
+
+// The language minutes and transcripts are written in, whatever was spoken.
+// Kept per device; English unless Chinese is picked.
+export const MINUTES_LANGUAGES = [
+  { value: 'English', label: 'English', short: 'English' },
+  { value: 'Chinese', label: 'Chinese (中文)', short: '中文' },
+];
+const LANG_KEY = 'nomiqo.minutesLanguage';
+export const minutesLanguage = () => {
+  const v = load(LANG_KEY, 'English');
+  return MINUTES_LANGUAGES.some((l) => l.value === v) ? v : 'English';
+};
+export const setMinutesLanguage = (v) => save(LANG_KEY, v);
+export const languageShort = (v) => (MINUTES_LANGUAGES.find((l) => l.value === v) || MINUTES_LANGUAGES[0]).short;
 
 export const isMinutes = (i) => i?.kind === 'Note' && String(i.title || '').startsWith(MINUTES_PREFIX);
 
@@ -67,6 +83,7 @@ const text = (v) => String(v ?? '').trim();
 /** The minutes as stored: everything the AI returned, each action item starting Open. */
 export function normaliseMinutes(ai = {}) {
   return {
+    language: MINUTES_LANGUAGES.some((l) => l.value === ai.language) ? ai.language : 'English',
     quick_summary: strings(ai.quick_summary),
     chairperson: text(ai.chairperson),
     attendees: strings(ai.attendees),

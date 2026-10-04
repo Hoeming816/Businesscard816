@@ -486,19 +486,28 @@ export async function downloadRecording(path) {
   return data;
 }
 
-/** Server-side transcription: { text, segments: [{ t: seconds, text }] }. Throws with code 'not_configured' if it is off. */
-export async function transcribe(blob, language, ext) {
+/**
+ * Server-side transcription, in `output` (English or Chinese): { text, segments: [{ t: seconds, text, orig? }], language }.
+ * A line spoken in another language keeps what was said in orig. Throws with code 'not_configured' if it is off. */
+export async function transcribe(blob, language, ext, output = 'English') {
   const form = new FormData();
   form.append('action', 'transcribe');
+  form.append('output', output);
   if (language) form.append('language', language.slice(0, 2)); // left out, Whisper detects it (mixed English/Chinese)
   form.append('audio', blob, `rec.${ext}`);
   try {
     const data = await invoke('meeting-notes', form);
-    return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [] };
+    return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [], language: data.language || '' };
   } catch (e) {
     if (/not configured|not set up|openai_api_key|not enabled/i.test(e.message)) e.code = 'not_configured';
     throw e;
   }
+}
+
+/** Translates a saved timed transcript into `output` (English or Chinese), keeping what was said in orig. */
+export async function translateTranscript(segments, output) {
+  const data = await invoke('meeting-notes', { action: 'translate', segments, output });
+  return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [] };
 }
 
 /** Returns { summary, key_points, action_items, follow_up_on, lead_status }. */

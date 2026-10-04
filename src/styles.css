@@ -1135,6 +1135,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 button.transcript-line { cursor: pointer; }
 button.transcript-line:hover, button.transcript-line:focus-visible { background: var(--surface-3); }
 .transcript-time { color: var(--accent); padding-top: 2px; }
+.transcript-lang { margin-bottom: 10px; }
+.meeting-make { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.minutes-lang { display: inline-flex; align-items: center; gap: 8px; }
+.minutes-lang select { width: auto; }
+.minutes-lang.is-compact select { min-height: 32px; padding-top: 4px; padding-bottom: 4px; font-size: 14px; }
 .transcript-plain { white-space: pre-wrap; margin: 0; }
 
 .ask-ai { display: grid; gap: 10px; }

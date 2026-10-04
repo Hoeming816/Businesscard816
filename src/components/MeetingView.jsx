@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { ACTION_PRIORITIES, ACTION_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
-import { clock, decisionLabel, dueState, lineTime, meetingTimes, minutesColumns, minutesDoc, minutesFileName, normaliseMinutes } from '../minutes.js';
+import { MINUTES_LANGUAGES, clock, decisionLabel, dueState, languageShort, lineTime, meetingTimes, minutesColumns, minutesDoc, minutesFileName, minutesLanguage, normaliseMinutes, setMinutesLanguage } from '../minutes.js';
 import { DOCX_TYPE, docxBytes } from '../docx.js';
 import { Icon, Spinner, ConfirmButton, Pill, SaveLabel, Tabs, useJustSaved, formatDate, formatDuration } from './ui.jsx';
 
@@ -104,9 +104,12 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
 
       {making && <p className="notice meeting-making" role="status"><Spinner /> {stage || 'Working…'} This can take a minute.</p>}
       {!m && !making && canEdit && canMakeMinutes && (
-        <button type="button" className="btn btn-primary" onClick={onMakeMinutes} disabled={busy}>
-          <Icon name="sparkles" size={16} /> Make minutes with AI
-        </button>
+        <div className="meeting-make">
+          <button type="button" className="btn btn-primary" onClick={onMakeMinutes} disabled={busy}>
+            <Icon name="sparkles" size={16} /> Make minutes with AI
+          </button>
+          <MinutesLanguage />
+        </div>
       )}
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Meeting" className="meeting-tabs" />
@@ -132,6 +135,7 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
             Write again
           </ConfirmButton>
         )}
+        {m && canEdit && canMakeMinutes && <MinutesLanguage compact />}
         {canEdit && i.audio_path && (
           <ConfirmButton className="btn btn-ghost btn-sm" icon="trash" confirmLabel="Delete recording" message="Delete the recording? The minutes stay." onConfirm={onDeleteRecording}>
             Delete recording
@@ -265,24 +269,50 @@ export function Actions({ items, canEdit, onStatus }) {
   );
 }
 
+/** Which language the minutes and transcript are written in (English or Chinese), kept on this device. */
+export function MinutesLanguage({ compact = false, disabled = false }) {
+  const [v, setV] = useState(minutesLanguage);
+  return (
+    <label className={`minutes-lang ${compact ? 'is-compact' : ''}`}>
+      <span className="small muted">{compact ? 'Write again in' : 'Minutes in'}</span>
+      <select value={v} disabled={disabled} onChange={(e) => { setV(e.target.value); setMinutesLanguage(e.target.value); }}>
+        {MINUTES_LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function Transcript({ i, onJump }) {
   const segs = Array.isArray(i.segments) ? i.segments : [];
+  // Lines spoken in another language (Tagalog, Mandarin...) are shown in the minutes language;
+  // "Original" shows what was actually said.
+  const translated = segs.some((s) => s.orig);
+  const [original, setOriginal] = useState(false);
   if (segs.length) {
+    const text = (s) => (original && s.orig) || s.text;
     return (
-      <ol className="transcript-lines">
-        {segs.map((s, k) => (
-          <li key={k}>
-            {onJump ? (
-              <button type="button" className="transcript-line" onClick={() => onJump(s.t)} aria-label={`Play from ${lineTime(i, s.t)}`}>
-                <span className="mono small transcript-time">{lineTime(i, s.t)}</span>
-                <span>{s.text}</span>
-              </button>
-            ) : (
-              <span className="transcript-line"><span className="mono small transcript-time">{lineTime(i, s.t)}</span><span>{s.text}</span></span>
-            )}
-          </li>
-        ))}
-      </ol>
+      <>
+        {translated && (
+          <div className="chips transcript-lang" role="group" aria-label="Transcript language">
+            <button type="button" className={`chip ${!original ? 'is-on' : ''}`} aria-pressed={!original} onClick={() => setOriginal(false)}>{languageShort(i.minutes?.language)}</button>
+            <button type="button" className={`chip ${original ? 'is-on' : ''}`} aria-pressed={original} onClick={() => setOriginal(true)}>Original</button>
+          </div>
+        )}
+        <ol className="transcript-lines">
+          {segs.map((s, k) => (
+            <li key={k}>
+              {onJump ? (
+                <button type="button" className="transcript-line" onClick={() => onJump(s.t)} aria-label={`Play from ${lineTime(i, s.t)}`}>
+                  <span className="mono small transcript-time">{lineTime(i, s.t)}</span>
+                  <span>{text(s)}</span>
+                </button>
+              ) : (
+                <span className="transcript-line"><span className="mono small transcript-time">{lineTime(i, s.t)}</span><span>{text(s)}</span></span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </>
     );
   }
   if (i.transcript) return <p className="transcript-plain">{i.transcript}</p>;
@@ -362,6 +392,7 @@ function MinutesEditor({ i, minutes, onCancel, onSaved }) {
   const m = minutes || normaliseMinutes();
   const [title, setTitle] = useState(i.title || '');
   const [f, setF] = useState(() => ({
+    language: m.language,
     quick_summary: m.quick_summary.join('\n'),
     chairperson: m.chairperson,
     attendees: m.attendees.join(', '),

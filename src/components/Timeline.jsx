@@ -3,7 +3,7 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import { clock, earlierActions, isMinutes, meetingTimes, minutesColumns, minutesRow, normaliseMinutes, outstanding, recordedAt, shareOrCopy, shareText } from '../minutes.js';
+import { clock, earlierActions, isMinutes, meetingTimes, minutesColumns, minutesLanguage, minutesRow, normaliseMinutes, outstanding, recordedAt, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
@@ -110,13 +110,20 @@ export function useEntryActions({ reload, contactFor }) {
 
   // A typed meeting: recording -> timed transcript -> minutes (Claude), saved on the meeting itself.
   const makeMeetingMinutes = async (i, contact) => {
+    const output = minutesLanguage();
     let transcript = i.transcript || '';
     let segments = i.segments;
+    if (Array.isArray(segments) && segments.length && (i.minutes?.language || 'English') !== output) {
+      // Written again in another language: the transcript follows.
+      setStage('Translating…');
+      ({ text: transcript, segments } = await api.translateTranscript(segments, output));
+      await api.updateInteraction(i.id, { transcript, segments });
+    }
     if (i.audio_path && !Array.isArray(segments)) {
       setStage('Transcribing…');
       try {
         const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-        const r = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext);
+        const r = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext, output);
         if (r.text) ({ text: transcript, segments } = r);
       } catch (e) {
         if (e.code !== 'not_configured') throw e;
@@ -146,10 +153,11 @@ export function useEntryActions({ reload, contactFor }) {
       time: t ? `${clock(t.start)}–${clock(t.end)}` : '',
       notes: i.notes || '',
       transcript,
+      output,
       contact: contact ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title } : {},
     });
     const followUp = outstanding(i, earlier, ai.follow_up || []);
-    await api.updateInteraction(i.id, minutesColumns(normaliseMinutes({ ...ai, follow_up: followUp })));
+    await api.updateInteraction(i.id, minutesColumns(normaliseMinutes({ ...ai, language: output, follow_up: followUp })));
     // Items this meeting says are done are ticked off in the meeting they came from.
     await markDone(list, followUp.filter((f) => f.state === 'Completed').map((f) => f.ref));
   };
@@ -188,7 +196,7 @@ export function useEntryActions({ reload, contactFor }) {
       if (!transcript) {
         try {
           const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-          transcript = (await api.transcribe(await api.downloadRecording(i.audio_path), null, ext)).text;
+          transcript = (await api.transcribe(await api.downloadRecording(i.audio_path), null, ext, minutesLanguage())).text;
         } catch (e) {
           if (e.code !== 'not_configured') throw e;
           if (!i.notes) {
@@ -206,6 +214,7 @@ export function useEntryActions({ reload, contactFor }) {
           ? { full_name: contact.full_name, company: contact.company, job_title: contact.job_title, lead_status: contact.lead_status }
           : {},
         today: i.occurred_on,
+        output: minutesLanguage(),
       });
       await api.insertInteraction({ ...minutesRow(i, ai, transcript), contact_id: i.contact_id || null, workspace_id: i.workspace_id });
       await reload();
@@ -348,6 +357,7 @@ function InteractionEditor({ contact, existing, onCancel, onSaved }) {
         kind: f.kind,
         contact: { full_name: contact.full_name, company: contact.company, job_title: contact.job_title, lead_status: contact.lead_status },
         today: todayISO(),
+        output: minutesLanguage(),
       });
       setF((x) => ({ ...x, summary: r.summary, action_items: r.action_items }));
       setSuggest(r.follow_up_on || r.lead_status ? { follow_up_on: r.follow_up_on, lead_status: r.lead_status } : null);

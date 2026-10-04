@@ -468,22 +468,33 @@ export async function downloadRecording(path) {
   if (!url) throw new Error('Could not load the recording');
   return (await fetch(url)).blob();
 }
+// A Taglish meeting, as the live app shows it: in the chosen language, with what was said kept as "orig".
 const DEMO_LINES = [
-  [0, 'Thanks for making the time today. Let us go through the fibre rollout for the two Singapore sites.'],
-  [7.5, 'Peter, can you submit the bill of materials by Wednesday?'],
-  [12, 'Yes, I will submit the BOM by Wednesday.'],
-  [16.5, 'We agreed to proceed with Supplier A for the fibre.'],
-  [22, 'Installation manpower goes from six to eight technicians so we finish before Friday.'],
-  [29, 'Engineering will complete the T3 site survey by the tenth.'],
-  [34.5, 'The client still has to approve the revised layout, which is a risk to the schedule.'],
-  [41, 'Let us meet again next Monday to check progress.'],
+  [0, 'Thanks for making the time today. Let us go through the fibre rollout for the two Singapore sites.', 'Salamat sa oras ninyo ngayon. Pag-usapan natin ang fibre rollout para sa dalawang Singapore sites.', '谢谢大家今天抽空。我们来讨论两个新加坡站点的光纤部署。'],
+  [7.5, 'Peter, can you submit the bill of materials by Wednesday?', 'Peter, kaya mo bang i-submit ang bill of materials bago mag-Wednesday?', 'Peter，你能在星期三之前提交物料清单吗？'],
+  [12, 'Yes, I will submit the BOM by Wednesday.', 'Oo, ipapasa ko ang BOM sa Wednesday.', '可以，我会在星期三之前提交 BOM。'],
+  [16.5, 'We agreed to proceed with Supplier A for the fibre.', 'Napagkasunduan natin na ituloy sa Supplier A para sa fibre.', '我们同意光纤采用 Supplier A。'],
+  [22, 'Installation manpower goes from six to eight technicians so we finish before Friday.', 'Gagawin nating walo ang technicians mula anim para matapos bago mag-Friday.', '安装人员从六名技术员增加到八名，以便在星期五前完成。'],
+  [29, 'Engineering will complete the T3 site survey by the tenth.', 'Tatapusin ng Engineering ang T3 site survey bago mag-tenth.', '工程部将在十号之前完成 T3 现场勘查。'],
+  [34.5, 'The client still has to approve the revised layout, which is a risk to the schedule.', 'Kailangan pang i-approve ng client ang revised layout, risk ito sa schedule.', '客户仍需批准修改后的布局，这对进度是个风险。'],
+  [41, 'Let us meet again next Monday to check progress.', 'Magkita ulit tayo sa Monday para i-check ang progress.', '下星期一再开会检查进度。'],
 ];
+const demoLine = (output) => ([t, en, orig, zh]) => ({ t, text: output === 'Chinese' ? zh : en, orig });
 
-export async function transcribe() {
+export async function transcribe(_blob, _language, _ext, output = 'English') {
   needFeature('meeting', 'Meeting');
   await sleep(1500);
-  const segments = DEMO_LINES.map(([t, text]) => ({ t, text }));
-  return { text: segments.map((x) => x.text).join(' '), segments };
+  const segments = DEMO_LINES.map(demoLine(output));
+  return { text: segments.map((x) => x.text).join(' '), segments, language: 'Tagalog' };
+}
+export async function translateTranscript(segments, output) {
+  needFeature('meeting', 'Meeting');
+  await sleep(800);
+  const out = segments.map((x) => {
+    const d = DEMO_LINES.find(([t]) => t === x.t);
+    return d ? demoLine(output)(d) : x;
+  });
+  return { text: out.map((x) => x.text).join(' '), segments: out };
 }
 export async function summarise({ contact, today, notes, transcript }) {
   needFeature('meeting', 'Meeting');
