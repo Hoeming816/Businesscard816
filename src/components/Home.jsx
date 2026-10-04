@@ -56,6 +56,13 @@ function HomePick({ onPick }) {
             <span>{s.label}</span>
           </button>
         ))}
+        {/* Two more sections are planned; their names aren't decided yet. */}
+        {[1, 2].map((n) => (
+          <div key={n} className="home-tile home-tile-soon" aria-label="Coming soon">
+            <span className="home-tile-soon-icon"><Icon name="plus" size={40} /></span>
+            <span>Coming soon</span>
+          </div>
+        ))}
       </div>
     </div>
   );

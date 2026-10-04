@@ -1034,6 +1034,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 /* The selection page fills the space between the bars and centres the tiles. */
 .home-pick { min-height: calc(100vh - var(--topbar-h) - var(--safe-t) - 72px); min-height: calc(100dvh - var(--topbar-h) - var(--safe-t) - 72px); align-content: center; }
 .home-pick .home-tiles { margin: 0 auto; }
+@media (min-width: 721px) { .home-pick .home-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 880px; } }
+.home-tile-soon { cursor: default; border-style: dashed; background: transparent; box-shadow: none; color: var(--ink-3); }
+.home-tile-soon:hover { border-color: var(--line); }
+.home-tile-soon:active { transform: none; }
+.home-tile-soon-icon { display: grid; place-items: center; width: 100%; max-width: 132px; aspect-ratio: 1; border-radius: 28px; background: var(--line); opacity: .6; }
 @media (max-width: 720px) {
   .home-pick {
     min-height: calc(100vh - 54px - var(--safe-t) - var(--tabbar-h) - var(--safe-b) - 44px);
