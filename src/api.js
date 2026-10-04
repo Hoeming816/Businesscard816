@@ -187,6 +187,19 @@ export async function updateMember(workspaceId, userId, patch) {
   fail(error);
 }
 
+/** Invitations waiting for my answer: [{ workspace_id, workspace_name, inviter_name, role, invited_at }]. */
+export async function listMyInvites() {
+  const { data, error } = await supabase.rpc('my_invites');
+  fail(error);
+  return data || [];
+}
+
+/** Accept (join the workspace) or decline (the invitation is removed). */
+export async function respondInvite(workspaceId, accept) {
+  const { error } = await supabase.rpc('respond_invite', { p_workspace: workspaceId, p_accept: accept });
+  fail(error, 'Could not answer the invitation');
+}
+
 export async function removeMember(workspaceId, userId) {
   const { error } = await supabase.from('workspace_members').delete().eq('workspace_id', workspaceId).eq('user_id', userId);
   fail(error);

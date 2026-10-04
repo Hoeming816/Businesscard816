@@ -52,6 +52,26 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 select pg_temp.ok((select role from public.add_member(:'ws', 'bob', 'editor')) = 'editor', 'admin adds editor by username');
 select pg_temp.ok((select role from public.add_member(:'ws', 'carol', 'viewer')) = 'viewer', 'admin adds viewer');
 select pg_temp.fails($$select public.add_member('$$ || :'ws' || $$', 'nobody', 'viewer')$$, 'unknown username rejected');
+select pg_temp.ok((select count(*) from public.workspace_members where workspace_id = :'ws' and status = 'invited') = 2, 'adding a member sends an invitation');
+select pg_temp.fails($$update public.workspace_members set status = 'active' where user_id = '00000000-0000-0000-0000-00000000000b'$$, 'admin cannot accept for the invitee');
+
+-- ---------------------------------------------------------------- invitations
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(public.ws_role(:'ws') is null, 'invitee has no access before accepting');
+select pg_temp.ok((select inviter_name is not null and role = 'editor' from public.my_invites() where workspace_id = :'ws'), 'invitee sees the invitation and who sent it');
+update public.workspace_members set status = 'active' where user_id = auth.uid() and workspace_id = :'ws';
+select pg_temp.ok(public.ws_role(:'ws') is null, 'invitee cannot skip the accept step');
+select public.respond_invite(:'ws', true);
+select pg_temp.ok(public.ws_role(:'ws') = 'editor', 'accepting the invitation joins the workspace');
+select pg_temp.ok(not exists (select 1 from public.my_invites()), 'accepted invitation is gone');
+select pg_temp.fails($$select public.respond_invite('$$ || :'ws' || $$', true)$$, 'cannot answer an invitation twice');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select pg_temp.ok(not exists (select 1 from public.my_invites()), 'others do not see the invitation');
+select pg_temp.fails($$select public.respond_invite('$$ || :'ws' || $$', true)$$, 'cannot accept someone else''s invitation');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select public.respond_invite(:'ws', true);
+select pg_temp.ok(public.ws_role(:'ws') = 'viewer', 'second invitee accepts');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 
 insert into public.contacts (id, workspace_id, full_name, company)
 values ('10000000-0000-0000-0000-000000000001', :'ws', 'Alice Card', 'Acme');
@@ -188,6 +208,14 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 update public.workspace_members set role = 'editor', status = 'active'
  where workspace_id = :'ws' and user_id = '00000000-0000-0000-0000-00000000000b';
 select public.add_member(:'ws', 'carol', 'viewer');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select public.respond_invite(:'ws', false);
+select pg_temp.ok(not exists (select 1 from public.workspace_members where user_id = auth.uid() and workspace_id = :'ws'), 'declining removes the invitation');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select public.add_member(:'ws', 'carol', 'viewer');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select public.respond_invite(:'ws', true);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 insert into storage.objects (bucket_id, name) values ('cards', :'ws' || '/10000000-0000-0000-0000-000000000002/front-9.jpg');
 update public.contacts
    set front_path = :'ws' || '/10000000-0000-0000-0000-000000000002/front-9.jpg',

@@ -13,6 +13,7 @@ export function memberStatus(m) {
   if (m.profile_status === 'deleted') return { label: 'Account deleted', tone: 'danger' };
   if (m.profile_status === 'suspended') return { label: 'Account suspended', tone: 'danger' };
   if (m.status === 'revoked') return { label: 'Access revoked', tone: 'warn' };
+  if (m.status === 'invited') return { label: 'Invited', tone: 'warn' };
   return { label: 'Active', tone: 'ok' };
 }
 
@@ -46,7 +47,7 @@ export default function Team() {
     try {
       await api.addMember(workspace.id, u, newRole);
       await reloadMembers();
-      toast(`@${u} added as ${newRole}`);
+      toast(`Invitation sent to @${u}. They join once they accept.`);
       setUsername('');
     } catch (err) {
       setAddError(err.message);
@@ -120,7 +121,7 @@ export default function Team() {
       {isAdmin && (
         <form className="panel add-member" onSubmit={add}>
           <h2 className="h3">Add a member</h2>
-          <p className="help">They need to have signed up for Nomiqo first. Ask them for their username.</p>
+          <p className="help">They need to have signed up for Nomiqo first. Ask them for their username. They get an invitation and join only if they accept.</p>
           <div className="add-row">
             <div className="field grow">
               <label htmlFor="add-username">Username</label>
@@ -178,7 +179,7 @@ export default function Team() {
                 <div className="member-actions">
                   {!locked && !self && (
                     <>
-                      {m.status === 'active' ? (
+                      {m.status === 'invited' ? null : m.status === 'active' ? (
                         <button type="button" className="btn btn-ghost btn-sm"
                           onClick={() => run(() => api.updateMember(workspace.id, m.user_id, { status: 'revoked' }), 'Access revoked')}>
                           Revoke
@@ -189,15 +190,22 @@ export default function Team() {
                           Restore
                         </button>
                       )}
-                      <ConfirmButton className="btn btn-danger-ghost btn-sm" confirmLabel="Remove" message="Remove from workspace?"
-                        onConfirm={() => run(() => api.removeMember(workspace.id, m.user_id), 'Member removed')}>
-                        Remove
-                      </ConfirmButton>
+                      {m.status === 'invited' ? (
+                        <ConfirmButton className="btn btn-danger-ghost btn-sm" confirmLabel="Withdraw" message="Withdraw the invitation?"
+                          onConfirm={() => run(() => api.removeMember(workspace.id, m.user_id), 'Invitation withdrawn')}>
+                          Withdraw
+                        </ConfirmButton>
+                      ) : (
+                        <ConfirmButton className="btn btn-danger-ghost btn-sm" confirmLabel="Remove" message="Remove from workspace?"
+                          onConfirm={() => run(() => api.removeMember(workspace.id, m.user_id), 'Member removed')}>
+                          Remove
+                        </ConfirmButton>
+                      )}
                     </>
                   )}
                   {owner && <span className="small muted">Locked</span>}
                 </div>
-                <span className="member-since small muted">Added {formatDate(m.created_at)}</span>
+                <span className="member-since small muted">{m.status === 'invited' ? 'Invited' : 'Added'} {formatDate(m.created_at)}</span>
               </li>
             );
           })}

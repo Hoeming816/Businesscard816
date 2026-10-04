@@ -12,6 +12,7 @@ import Team from './components/Team.jsx';
 import SuperAdmin from './components/SuperAdmin.jsx';
 import Me from './components/Me.jsx';
 import IncomingShare from './components/IncomingShare.jsx';
+import IncomingInvite from './components/IncomingInvite.jsx';
 
 const WS_KEY = 'cardfile.workspace';
 const SIGN_REFRESH_MS = 50 * 60 * 1000; // signed URLs live 1 h; refresh after 50 min
@@ -34,6 +35,8 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   // Cards other members are offering; the first one not put off is shown as a prompt.
   const [incoming, setIncoming] = useState([]);
+  // Teams that invited me; answered before any card offers.
+  const [invites, setInvites] = useState([]);
   const [later, setLater] = useState(() => new Set());
   const [signedVersion, setSignedVersion] = useState(0);
   const signedRef = useRef(new Map()); // `${bucket}:${path}` -> { url, at }
@@ -141,11 +144,12 @@ export default function App() {
 
   const loadIncoming = useCallback(async () => {
     if (!user) return;
+    try { setInvites(await api.listMyInvites()); } catch { /* the prompt is best-effort */ }
     try { setIncoming(await api.listIncomingShares(user.id)); } catch { /* the prompt is best-effort */ }
   }, [user]);
   useEffect(() => {
     if (profile) loadIncoming();
-    else setIncoming([]);
+    else { setIncoming([]); setInvites([]); }
   }, [profile?.id, loadIncoming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh: reload the page when a newer build is live (so installed home-screen
@@ -252,8 +256,10 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
+  const waitingInvites = invites.filter((i) => !later.has(`invite:${i.workspace_id}`));
+  const invite = waitingInvites[0];
   const waiting = incoming.filter((s) => !later.has(s.id));
-  const offer = waiting[0];
+  const offer = invite ? null : waiting[0];
 
   let main;
   if (!workspace && view !== 'me' && !(view === 'admin' && isSuper)) {
@@ -345,6 +351,18 @@ export default function App() {
           />
         </nav>
       </div>
+      {invite && (
+        <IncomingInvite
+          key={invite.workspace_id}
+          invite={invite}
+          remaining={waitingInvites.length - 1}
+          onLater={() => setLater((s) => new Set(s).add(`invite:${invite.workspace_id}`))}
+          onDone={(i, joined) => {
+            setInvites((list) => list.filter((x) => x.workspace_id !== i.workspace_id));
+            if (joined) { reloadWorkspaces().catch(() => {}); loadIncoming(); }
+          }}
+        />
+      )}
       {offer && (
         <IncomingShare
           key={offer.id}

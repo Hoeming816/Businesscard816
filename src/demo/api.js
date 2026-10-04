@@ -161,8 +161,29 @@ export async function addMember(ws, username, role) {
   const w = db.workspaces.find((x) => x.id === ws);
   if (w.owner_id === p.id) throw new Error('that person owns this workspace');
   const existing = db.members.find((m) => m.workspace_id === ws && m.user_id === p.id);
-  if (existing) Object.assign(existing, { role, status: 'active' });
-  else db.members.push({ workspace_id: ws, user_id: p.id, role, status: 'active', created_at: now() });
+  if (existing?.status === 'active') existing.role = role;
+  else if (existing) Object.assign(existing, { role, status: 'invited', added_by: uid(), created_at: now() });
+  else db.members.push({ workspace_id: ws, user_id: p.id, role, status: 'invited', added_by: uid(), created_at: now() });
+}
+export async function listMyInvites() {
+  await tick();
+  return db.members
+    .filter((m) => m.user_id === uid() && m.status === 'invited')
+    .map((m) => {
+      const w = db.workspaces.find((x) => x.id === m.workspace_id);
+      const by = profile(m.added_by) || profile(w?.owner_id) || {};
+      return w?.status === 'active'
+        ? { workspace_id: w.id, workspace_name: w.name, inviter_name: by.full_name || by.username, role: m.role, invited_at: m.created_at }
+        : null;
+    })
+    .filter(Boolean);
+}
+export async function respondInvite(ws, accept) {
+  await sleep(200);
+  const m = db.members.find((x) => x.workspace_id === ws && x.user_id === uid() && x.status === 'invited');
+  if (!m) throw new Error('This invitation is no longer open.');
+  if (accept) m.status = 'active';
+  else db.members = db.members.filter((x) => x !== m);
 }
 function guardMember(ws, userId) {
   const w = db.workspaces.find((x) => x.id === ws);
@@ -173,6 +194,8 @@ function guardMember(ws, userId) {
 export async function updateMember(ws, userId, patch) {
   await tick();
   guardMember(ws, userId);
+  const row = db.members.find((m) => m.workspace_id === ws && m.user_id === userId);
+  if (row?.status === 'invited' && patch.status === 'active') deny('They join when they accept the invitation.');
   if (patch.role && userId === uid()) deny('you cannot change your own role');
   Object.assign(db.members.find((m) => m.workspace_id === ws && m.user_id === userId), patch);
 }
