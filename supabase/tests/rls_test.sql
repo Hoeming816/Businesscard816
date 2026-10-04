@@ -395,6 +395,53 @@ select pg_temp.ok((select count(*) from public.tasks) = 2, 'owner keeps their ta
 delete from public.tasks where id = '50000000-0000-0000-0000-000000000002';
 select pg_temp.ok((select count(*) from public.tasks) = 1, 'owner deletes their task');
 
+-- ---------------------------------------------------------------- quick notes
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+update public.profiles set features = '{}' where username in ('alice', 'bob', 'carol', 'dave');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok(not public.feature_on('notes'), 'quick notes is off by default');
+select pg_temp.fails($$insert into public.notes (body) values ('x')$$, 'notes refused while quick notes is off');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+select pg_temp.ok(public.feature_on('notes'), 'super admin has quick notes');
+update public.profiles set features = '{"notes": true}' where username in ('alice', 'bob');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into public.notes (id, title, body, created_by)
+values ('60000000-0000-0000-0000-000000000001', 'Gate code', '4471#', '00000000-0000-0000-0000-00000000000b');
+select pg_temp.ok((select created_by = auth.uid() from public.notes where id = '60000000-0000-0000-0000-000000000001'), 'a new note is always the caller''s own');
+select pg_temp.fails($$insert into public.notes (body, color) values ('x', 'orange')$$, 'colour must be a known one');
+insert into public.note_topics (id, name) values ('61000000-0000-0000-0000-000000000001', 'Cebu trip');
+select pg_temp.fails($$insert into public.note_topics (name) values (' cebu TRIP')$$, 'topic names are unique per person');
+update public.notes set topic_id = '61000000-0000-0000-0000-000000000001' where id = '60000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select topic_id is not null from public.notes where id = '60000000-0000-0000-0000-000000000001'), 'a note goes in a topic');
+insert into storage.objects (bucket_id, name) values ('note-files', '00000000-0000-0000-0000-00000000000a/60000000-0000-0000-0000-000000000001/photo.jpg');
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('note-files', '00000000-0000-0000-0000-00000000000b/x/evil.jpg')$$, 'cannot upload into someone else''s notes folder');
+select pg_temp.fails($$update public.notes set created_by = '00000000-0000-0000-0000-00000000000b' where id = '60000000-0000-0000-0000-000000000001'$$, 'a note cannot be given away');
+update public.notes set body = '4471# then left' where id = '60000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select body = '4471# then left' from public.notes where id = '60000000-0000-0000-0000-000000000001'), 'owner edits their note');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(not exists (select 1 from public.notes), 'teammates cannot see each other''s notes');
+select pg_temp.ok(not exists (select 1 from storage.objects where bucket_id = 'note-files'), 'teammates cannot see each other''s note files');
+select pg_temp.ok(not exists (select 1 from public.note_topics), 'teammates cannot see each other''s topics');
+insert into public.note_topics (id, name) values ('61000000-0000-0000-0000-000000000002', 'Bob stuff');
+select pg_temp.fails($$insert into public.notes (body, topic_id) values ('x', '61000000-0000-0000-0000-000000000001')$$, 'cannot put a note in someone else''s topic');
+update public.notes set body = 'hacked' where id = '60000000-0000-0000-0000-000000000001';
+delete from public.notes where id = '60000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+select pg_temp.ok(not exists (select 1 from public.notes), 'super admin cannot read anyone''s notes');
+select pg_temp.ok(not exists (select 1 from public.note_topics), 'super admin cannot read anyone''s topics');
+select pg_temp.ok(not exists (select 1 from storage.objects where bucket_id = 'note-files'), 'super admin cannot read anyone''s note files');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok((select body = '4471# then left' from public.notes where id = '60000000-0000-0000-0000-000000000001'), 'others cannot change or delete a note');
+select pg_temp.ok(exists (select 1 from storage.objects where bucket_id = 'note-files'), 'owner sees their note files');
+delete from storage.objects where bucket_id = 'note-files';
+delete from public.notes where id = '60000000-0000-0000-0000-000000000001';
+select pg_temp.ok(not exists (select 1 from public.notes), 'owner deletes their note');
+delete from public.note_topics where id = '61000000-0000-0000-0000-000000000001';
+select pg_temp.ok(not exists (select 1 from public.note_topics), 'owner deletes their topic');
+
 -- ---------------------------------------------------------------- anon
 reset role;
 set role anon;
@@ -404,6 +451,7 @@ select pg_temp.fails($$select public.ws_role('$$ || :'ws' || $$')$$, 'anon canno
 select pg_temp.fails($$select public.super_admin_workspaces()$$, 'anon cannot call dashboard RPC');
 select pg_temp.fails($$select count(*) from public.card_shares$$, 'anon cannot read shares');
 select pg_temp.fails($$select count(*) from public.tasks$$, 'anon cannot read tasks');
+select pg_temp.fails($$select count(*) from public.notes$$, 'anon cannot read notes');
 select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000002')$$, 'anon cannot accept shares');
 reset role;
 \echo 'ALL RLS TESTS PASSED'

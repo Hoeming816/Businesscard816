@@ -591,6 +591,117 @@ export async function voiceTask(blob, ext, clock, language = 'English') {
 }
 
 // ---------------------------------------------------------------------------
+// Quick Notes (only ever my own: the database shows nobody else's)
+// ---------------------------------------------------------------------------
+
+export async function listNotes() {
+  const { data, error } = await supabase.from('notes').select('*').order('updated_at', { ascending: false });
+  fail(error);
+  return data || [];
+}
+
+/** row may carry its own id (made on this device so its files can be uploaded first). */
+export async function insertNote(row) {
+  const { data, error } = await supabase.from('notes').insert(row).select().single();
+  fail(error);
+  return data;
+}
+
+export async function updateNote(id, patch) {
+  const { data, error } = await supabase.from('notes').update(patch).eq('id', id).select().single();
+  fail(error);
+  return data;
+}
+
+/** Deletes a note for good, its photos and files first. */
+export async function deleteNoteForever(note) {
+  const paths = (note.files || []).map((f) => f.path).filter(Boolean);
+  for (const p of await listFolder('note-files', `${note.created_by}/${note.id}`)) if (!paths.includes(p)) paths.push(p);
+  if (paths.length) {
+    const { error } = await supabase.storage.from('note-files').remove(paths);
+    fail(error, 'Could not delete the note\'s files');
+  }
+  const { error } = await supabase.from('notes').delete().eq('id', note.id);
+  fail(error);
+}
+
+/** Uploads a photo, recording or file for a note. Returns the file entry saved on the note. */
+export async function uploadNoteFile(ownerId, noteId, blob, name) {
+  const path = `${ownerId}/${noteId}/${Date.now().toString(36)}-${name}`;
+  const { error } = await supabase.storage.from('note-files').upload(path, blob, { contentType: blob.type || 'application/octet-stream', upsert: false });
+  fail(error, 'Upload failed');
+  return { path, name, type: blob.type || 'application/octet-stream', size: blob.size };
+}
+
+export async function listNoteTopics() {
+  const { data, error } = await supabase.from('note_topics').select('*').order('name');
+  fail(error);
+  return data || [];
+}
+
+export async function insertNoteTopic(row) {
+  const { data, error } = await supabase.from('note_topics').insert(row).select().single();
+  if (error?.code === '23505') throw new Error('You already have a topic with that name.');
+  fail(error);
+  return data;
+}
+
+export async function updateNoteTopic(id, patch) {
+  const { data, error } = await supabase.from('note_topics').update(patch).eq('id', id).select().single();
+  if (error?.code === '23505') throw new Error('You already have a topic with that name.');
+  fail(error);
+  return data;
+}
+
+export async function deleteNoteTopic(id) {
+  const { error } = await supabase.from('note_topics').delete().eq('id', id);
+  fail(error);
+}
+
+/**
+ * Speech to note: transcribes a recording and works out what was asked, written in
+ * `language`. `topics` are my topic names; `inTopic` is the open topic's name, or ''.
+ * `clock` is { today, time } on this device, for dates of things to do found in it.
+ * Returns { text, result: { action: 'note' | 'topic', topic, title, body, checklist, tags, actions } }.
+ */
+export async function voiceNote(blob, ext, language = 'English', topics = [], inTopic = '', clock = {}) {
+  const form = new FormData();
+  form.append('today', clock.today || '');
+  form.append('time', clock.time || '');
+  form.append('action', 'voice');
+  form.append('language', language);
+  form.append('topics', JSON.stringify(topics));
+  form.append('in_topic', inTopic);
+  form.append('audio', blob, `note.${ext}`);
+  const data = await invoke('notes-ai', form);
+  return { text: data.text || '', result: data.result };
+}
+
+/** ✨ Clean up: a rushed note rewritten with a title and tidy points. Returns { title, body }. */
+export async function cleanUpNote(title, body) {
+  return invoke('notes-ai', { action: 'cleanup', title, body });
+}
+
+/**
+ * Things to do found in a note's text, for "Add to To-Do": [{ title, due_on, due_time }].
+ * `clock` is { today, time } on this device.
+ */
+export async function noteActions(text, clock) {
+  const data = await invoke('notes-ai', { action: 'actions', text, ...clock });
+  return data.actions || [];
+}
+
+/** Speech to text for adding to a note being edited, tidied and written in `language`. */
+export async function dictateNote(blob, ext, language = 'English') {
+  const form = new FormData();
+  form.append('action', 'dictate');
+  form.append('language', language);
+  form.append('audio', blob, `note.${ext}`);
+  const data = await invoke('notes-ai', form);
+  return data.text || '';
+}
+
+// ---------------------------------------------------------------------------
 // Super admin
 // ---------------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ import { todayISO, addDays } from '../filters.js';
 import { canEditContact, canDeleteContact, canEditInteraction } from '../perms.js';
 import { featureOn } from '../features.js';
 import { parseQuickAdd } from '../todo.js';
+import { looksActionable } from '../notes.js';
 
 export const isDemo = true;
 export const isConfigured = true;
@@ -28,6 +29,8 @@ const db = {
   blobs: new Map(), // storage path -> object URL
   shares: [],
   tasks: [],
+  notes: [],
+  noteTopics: [],
 };
 // One card waiting for Alex, so the demo shows the accept prompt.
 {
@@ -668,6 +671,156 @@ export async function voiceTask(_blob, _ext, clock, _language) {
   await sleep(1200);
   const text = 'Remind me to send the quotation to Acme on Friday at 3pm, high priority';
   return { text, task: await aiTask(text, clock) };
+}
+
+// ---------------------------------------------------------------------------
+// Quick Notes (rules as in migration 0012: only ever the owner's own)
+// ---------------------------------------------------------------------------
+
+{
+  const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const topic = (id, name, color, h) => ({ id, created_by: ME, name, color, created_at: ago(h), updated_at: ago(h) });
+  db.noteTopics.push(topic('nt-1', 'Cebu trip', 'blue', 50), topic('nt-2', 'Acme project', 'green', 80));
+  const note = (n, h) => ({
+    id: newId('n'), created_by: ME, topic_id: null, title: null, body: '', checklist: [], tags: [], color: null, files: [], pinned: false,
+    archived_at: null, deleted_at: null, created_at: ago(h), updated_at: ago(h), ...n,
+  });
+  db.notes.push(
+    note({ title: 'Wi-Fi at the warehouse', body: 'Network: AspenWH-5G\nPassword: on the router label', pinned: true, color: 'yellow', tags: ['Work'] }, 30),
+    note({ body: 'Idea: send customers a monthly CCTV health check report #Idea', tags: ['Idea'] }, 2),
+    note({ topic_id: 'nt-1', title: 'Packing', checklist: [{ id: 'c1', text: 'Passport', done: true }, { id: 'c2', text: 'Chargers', done: false }, { id: 'c3', text: 'Sunscreen', done: false }] }, 20),
+    note({ topic_id: 'nt-1', body: 'Hotel: Mango Suites, check-in 2pm. Booking ref MS-44821.' }, 26),
+    note({ topic_id: 'nt-2', title: 'Kick-off call', body: 'Peter wants 24 cameras across 3 floors. Quote by Friday.', tags: ['Customer'], color: 'green' }, 6),
+    note({ body: 'Old parking spot number: B2-117' }, 400),
+  );
+  db.notes[db.notes.length - 1].archived_at = ago(300);
+}
+
+const myNote = (id) => db.notes.find((n) => n.id === id && n.created_by === uid());
+const myTopic = (id) => db.noteTopics.find((t) => t.id === id && t.created_by === uid());
+function noteRules(n) {
+  if (n.topic_id && !myTopic(n.topic_id)) deny('That topic is not there any more.');
+  if (n.color && !['yellow', 'green', 'blue', 'pink', 'purple', 'grey'].includes(n.color)) deny('Unknown colour.');
+}
+function topicRules(t) {
+  const name = String(t.name || '').trim();
+  if (!name) deny('Give the topic a name.');
+  const key = name.toLowerCase();
+  if (db.noteTopics.some((x) => x.id !== t.id && x.created_by === uid() && x.name.trim().toLowerCase() === key)) deny('You already have a topic with that name.');
+}
+
+export async function listNotes() {
+  await tick();
+  return clone(db.notes.filter((n) => n.created_by === uid()));
+}
+export async function insertNote(row) {
+  await tick();
+  needFeature('notes', 'Quick Notes');
+  const n = {
+    id: newId('n'), topic_id: null, title: null, body: '', checklist: [], tags: [], color: null, files: [], pinned: false,
+    archived_at: null, deleted_at: null, created_at: now(), ...clone(row), created_by: uid(), updated_at: now(),
+  };
+  noteRules(n);
+  db.notes.push(n);
+  return clone(n);
+}
+export async function updateNote(id, patch) {
+  await tick();
+  const n = myNote(id);
+  if (!n) deny('That note is no longer there.');
+  const next = { ...n, ...clone(patch), id: n.id, created_by: n.created_by, updated_at: now() };
+  noteRules(next);
+  Object.assign(n, next);
+  return clone(n);
+}
+export async function deleteNoteForever(note) {
+  await tick();
+  const i = db.notes.findIndex((n) => n.id === note.id && n.created_by === uid());
+  if (i === -1) deny('That note is no longer there.');
+  for (const f of db.notes[i].files || []) db.blobs.delete(f.path);
+  db.notes.splice(i, 1);
+}
+export async function uploadNoteFile(ownerId, noteId, blob, name) {
+  await tick();
+  needFeature('notes', 'Quick Notes');
+  if (ownerId !== uid()) deny();
+  const path = `${ownerId}/${noteId}/${Date.now().toString(36)}-${name}`;
+  db.blobs.set(path, URL.createObjectURL(blob));
+  return { path, name, type: blob.type || 'application/octet-stream', size: blob.size };
+}
+export async function listNoteTopics() {
+  await tick();
+  return clone(db.noteTopics.filter((t) => t.created_by === uid()).sort((a, b) => a.name.localeCompare(b.name)));
+}
+export async function insertNoteTopic(row) {
+  await tick();
+  needFeature('notes', 'Quick Notes');
+  const t = { id: newId('nt'), color: null, created_at: now(), ...clone(row), created_by: uid(), updated_at: now() };
+  topicRules(t);
+  db.noteTopics.push(t);
+  return clone(t);
+}
+export async function updateNoteTopic(id, patch) {
+  await tick();
+  const t = myTopic(id);
+  if (!t) deny('That topic is no longer there.');
+  const next = { ...t, ...clone(patch), id: t.id, created_by: t.created_by, updated_at: now() };
+  topicRules(next);
+  Object.assign(t, next);
+  return clone(t);
+}
+export async function deleteNoteTopic(id) {
+  await tick();
+  if (!myTopic(id)) deny('That topic is no longer there.');
+  db.noteTopics = db.noteTopics.filter((t) => t.id !== id);
+  for (const n of db.notes) if (n.topic_id === id) n.topic_id = null;
+}
+// The demo can't listen, so it pretends: the first recording asks for a new topic,
+// the next ones add notes.
+let demoVoiceTurn = 0;
+export async function voiceNote(_blob, _ext, _language, _topics, inTopic = '', _clock = {}) {
+  needFeature('notes', 'Quick Notes');
+  await sleep(1200);
+  const turn = demoVoiceTurn++;
+  if (!inTopic && turn % 2 === 0) {
+    const text = 'Create a new topic, call it "Inventory Management software".';
+    return { text, result: { action: 'topic', topic: 'Inventory Management software', title: '', body: '', checklist: [], tags: [], actions: [] } };
+  }
+  const text = 'Idea for the inventory system. We should have an alert when stock falls below minimum quantity and automatically notify purchasing. Need to call James tomorrow about the scanner quotation.';
+  const todo = featureOn(profile(uid()), 'todo');
+  return {
+    text,
+    result: {
+      action: 'note', topic: inTopic || 'Inventory Management software', title: 'Inventory System Idea',
+      body: 'Add a minimum-stock alert. When inventory falls below the preset quantity, automatically notify Purchasing. Call James tomorrow about the scanner quotation.',
+      checklist: [], tags: ['Idea'],
+      actions: todo ? [{ title: 'Call James about the scanner quotation', due_on: addDays(todayISO(), 1), due_time: null }] : [],
+    },
+  };
+}
+export async function cleanUpNote(title, body) {
+  needFeature('notes', 'Quick Notes');
+  await sleep(900);
+  // The demo splits on "and" and commas; the live app asks Claude.
+  const parts = String(body || '').split(/\s*(?:,|;|\n|\band\b|\balso\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+  const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  return { title: String(title || '').trim() || cap(parts[0] || 'Note').slice(0, 40), body: parts.map((x) => `• ${cap(x)}`).join('\n') };
+}
+export async function noteActions(text, clock) {
+  needFeature('notes', 'Quick Notes');
+  needFeature('todo', 'To Do List');
+  await sleep(600);
+  // The demo reads each sentence that looks like a to-do with the To Do List's quick parser.
+  return String(text || '').split(/(?<=[.!?\n])\s*/).filter((x) => looksActionable(x)).slice(0, 5).map((sentence) => {
+    const t = parseQuickAdd(sentence.replace(/^(i\s+)?(need|have|must|got)\s+to\s+|^remember\s+to\s+|^remind me to\s+/i, ''), demoClock(clock));
+    const title = t.title.replace(/[.!?]+$/, '');
+    return { title: title.charAt(0).toUpperCase() + title.slice(1), due_on: t.due_on, due_time: t.due_time };
+  });
+}
+export async function dictateNote(_blob, _ext, _language) {
+  needFeature('notes', 'Quick Notes');
+  await sleep(1000);
+  return 'Also check whether they support stock counts on a phone.';
 }
 
 function requireSuper() {

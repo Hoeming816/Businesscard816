@@ -21,3 +21,6 @@ verify_jwt = true
 
 [functions.todo-ai]
 verify_jwt = true
+
+[functions.notes-ai]
+verify_jwt = true

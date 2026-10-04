@@ -3,6 +3,7 @@ import { useApp } from '../context.js';
 import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
 import Todo from './Todo.jsx';
+import Notes from './Notes.jsx';
 import { Icon } from './ui.jsx';
 import { useBack } from '../back.js';
 import { ReminderList } from './TaskReminders.jsx';
@@ -50,8 +51,7 @@ export default function Home() {
       <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>
         <Icon name="chevronLeft" size={16} /> Back
       </button>
-      {section === 'cards' ? <Contacts /> : section === 'minutes' ? <Minutes /> : section === 'todo' ? <Todo />
-        : <ComingSoon section={SECTIONS.find((s) => s.value === section)} />}
+      {section === 'cards' ? <Contacts /> : section === 'minutes' ? <Minutes /> : section === 'todo' ? <Todo /> : <Notes />}
     </div>
   );
 }
@@ -80,17 +80,6 @@ function HomePick({ sections, onPick, counts, reminders }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-/** Quick Notes isn't built yet; its tile opens this. */
-function ComingSoon({ section }) {
-  return (
-    <div className="empty">
-      <img src={section.img} alt="" width="96" height="96" />
-      <h3>{section.label}</h3>
-      <p>Coming soon.</p>
     </div>
   );
 }

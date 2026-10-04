@@ -5,7 +5,16 @@ import { ReminderList } from './TaskReminders.jsx';
 export default function Notifications({ invites, shares, replies, reminders, seenAt, onOpen, onClose }) {
   const waiting = invites.length + shares.length;
   return (
-    <Modal title="Notifications" onClose={onClose} className="notifications">
+    <Modal labelledBy="notif-title" onClose={onClose} className="notifications">
+      <div className="notif-bar">
+        <button type="button" className="icon-btn" onClick={onClose} aria-label="Back">
+          <Icon name="chevronLeft" size={22} />
+        </button>
+        <h2 id="notif-title" className="modal-title">Notifications</h2>
+        <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <Icon name="x" size={20} />
+        </button>
+      </div>
       {reminders?.active.length > 0 && (
         <>
           <h3 className="notif-head">Reminders</h3>
@@ -54,6 +63,13 @@ export default function Notifications({ invites, shares, replies, reminders, see
           </ul>
         </>
       )}
+
+      {/* On a phone this page covers the menu bar, so Back sits at the bottom too. */}
+      <div className="notif-foot">
+        <button type="button" className="btn btn-outline btn-lg" onClick={onClose}>
+          <Icon name="chevronLeft" size={18} /> Back
+        </button>
+      </div>
     </Modal>
   );
 }
