@@ -245,8 +245,8 @@ export default function App() {
   const nav = [
     { value: 'contacts', label: 'Home', icon: 'cards' },
     { value: 'scan', label: 'Scan card', icon: 'scan' },
-    { value: 'team', label: 'Team', icon: 'users' },
-    ...(isSuper ? [{ value: 'admin', label: 'Super admin', icon: 'shield' }] : []),
+    // Nomiqo is a personal app: team pages are for the super admin only.
+    ...(isSuper ? [{ value: 'team', label: 'Team', icon: 'users' }, { value: 'admin', label: 'Super admin', icon: 'shield' }] : []),
   ];
   const go = (v) => {
     setView(v);
@@ -260,7 +260,7 @@ export default function App() {
   if (!workspace && view !== 'me' && !(view === 'admin' && isSuper)) {
     main = <NoWorkspace onMe={() => go('me')} />;
   } else if (view === 'scan') main = <Scan key={workspace.id} />;
-  else if (view === 'team') main = <Team key={workspace.id} />;
+  else if (view === 'team' && isSuper) main = <Team key={workspace.id} />;
   else if (view === 'admin' && isSuper) main = <SuperAdmin />;
   else if (view === 'me') main = <Me />;
   else main = <Home key={workspace.id} />;
@@ -313,7 +313,7 @@ export default function App() {
 
         <nav className="tabbar" aria-label="Main">
           <TabbarItem icon="cards" label="Home" active={view === 'contacts'} onClick={() => go('contacts')} />
-          <TabbarItem icon="users" label="Team" active={view === 'team'} onClick={() => go('team')} />
+          {isSuper && <TabbarItem icon="users" label="Team" active={view === 'team'} onClick={() => go('team')} />}
           <button
             type="button"
             className={`tabbar-scan ${view === 'scan' ? 'is-active' : ''}`}
@@ -351,7 +351,7 @@ export default function App() {
           key={offer.id}
           share={offer}
           remaining={waiting.length - 1}
-          workspaceName={workspaces?.length > 1 ? workspaceLabel(workspaces.find((w) => w.id === offer.workspace_id), user?.id) : ''}
+          workspaceName={isSuper && workspaces?.length > 1 ? workspaceLabel(workspaces.find((w) => w.id === offer.workspace_id), user?.id) : ''}
           onLater={() => setLater((s) => new Set(s).add(offer.id))}
           onDone={(s, copy) => {
             setIncoming((list) => list.filter((x) => x.id !== s.id));
@@ -374,9 +374,10 @@ function TabbarItem({ icon, label, active, onClick }) {
 }
 
 function WorkspaceSwitcher() {
-  const { workspaces, workspace, switchWorkspace, uid } = useApp();
+  const { workspaces, workspace, switchWorkspace, uid, profile } = useApp();
   if (!workspaces || !workspaces.length) return <span className="ws-switch ws-empty">No workspace</span>;
-  if (workspaces.length === 1) {
+  // Only the super admin gets the list; everyone else sees just "My cards" (teams can be switched on the Me page).
+  if (workspaces.length === 1 || !profile?.is_super_admin) {
     return (
       <span className="ws-switch ws-single">
         <Icon name="building" size={16} className="ws-icon" />

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { workspaceLabel } from '../workspaceLabel.js';
 import { useApp } from '../context.js';
-import { Icon, Avatar, Pill, SaveLabel, useJustSaved } from './ui.jsx';
+import { Icon, Avatar, Pill, ConfirmButton, SaveLabel, useJustSaved } from './ui.jsx';
 
 export default function Me() {
   const { api, profile, setProfile, workspaces, workspace, switchWorkspace, reloadWorkspaces, toast, setView } = useApp();
@@ -15,6 +15,7 @@ export default function Me() {
   const [pwSaved, markPwSaved] = useJustSaved();
   const [wsName, setWsName] = useState('');
   const [creating, setCreating] = useState(false);
+  const isSuper = !!profile.is_super_admin;
 
   const saveName = async (e) => {
     e.preventDefault();
@@ -46,6 +47,16 @@ export default function Me() {
       setPwError(err.message);
     } finally {
       setSavingPw(false);
+    }
+  };
+
+  const leave = async (w) => {
+    try {
+      await api.removeMember(w.id, profile.id);
+      toast('You left the team.');
+      await reloadWorkspaces();
+    } catch (err) {
+      toast(err.message, 'error');
     }
   };
 
@@ -110,6 +121,34 @@ export default function Me() {
         <button type="submit" className="btn btn-primary" disabled={savingPw || !pw}><SaveLabel saving={savingPw} saved={pwSaved}>Change password</SaveLabel></button>
       </form>
 
+      {!isSuper && (workspaces || []).length > 1 && (
+        <section className="panel" aria-labelledby="me-ws">
+          <h2 id="me-ws" className="h3">Your cards</h2>
+          <p className="help">You joined a team so you can send and receive shared cards. Your cards stay private in each.</p>
+          <ul className="ws-list">
+            {[...workspaces].sort((a, b) => (b.owner_id === profile.id) - (a.owner_id === profile.id)).map((w) => {
+              const own = w.owner_id === profile.id;
+              return (
+                <li key={w.id}>
+                  <Icon name={own ? 'user' : 'users'} size={16} />
+                  <span className="grow">{own ? 'My cards' : 'Team cards'}</span>
+                  {w.id === workspace?.id ? (
+                    <Pill tone="ok">Current</Pill>
+                  ) : (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { switchWorkspace(w.id); setView('contacts'); }}>Switch</button>
+                  )}
+                  {!own && (
+                    <ConfirmButton className="btn btn-danger-ghost btn-sm" confirmLabel="Leave" message="Leave this team?" onConfirm={() => leave(w)}>
+                      Leave
+                    </ConfirmButton>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+      {isSuper && (
       <section className="panel" aria-labelledby="me-ws">
         <h2 id="me-ws" className="h3">Your workspaces</h2>
         <ul className="ws-list">
@@ -138,6 +177,7 @@ export default function Me() {
         </form>
         <p className="help">You become the admin of new workspaces and can invite people from Team.</p>
       </section>
+      )}
     </div>
   );
 }
