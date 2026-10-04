@@ -1034,9 +1034,6 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 /* The selection page fills the space between the bars and centres the tiles. */
 .home-pick { min-height: calc(100vh - var(--topbar-h) - var(--safe-t) - 72px); min-height: calc(100dvh - var(--topbar-h) - var(--safe-t) - 72px); align-content: center; }
 .home-pick .home-tiles { margin: 0 auto; }
-@media (min-width: 721px) { .home-pick .home-tiles:has(> :nth-child(3)) { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 640px; } }
-/* On phones an odd last tile sits centred under the others. */
-@media (max-width: 720px) { .home-tile:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 8px); } }
 @media (max-width: 720px) {
   .home-pick {
     min-height: calc(100vh - 54px - var(--safe-t) - var(--tabbar-h) - var(--safe-b) - 44px);
