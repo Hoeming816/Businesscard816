@@ -353,7 +353,13 @@ export async function acceptShare(share) {
   const row = Array.isArray(data) ? data[0] : data;
   const id = row.new_contact_id;
   const patch = {};
-  for (const [side, path] of [['front', row.front_path], ['back', row.back_path]]) {
+  // The face photo is not in the accept reply; it sits in the card's folder as face-<ms>.jpg.
+  let facePath = null;
+  try {
+    facePath = (await listFolder('cards', `${share.workspace_id}/${share.contact_id}`))
+      .filter((p) => /\/face-\d+\.jpg$/.test(p)).sort().pop() || null;
+  } catch { /* no face photo */ }
+  for (const [side, path] of [['front', row.front_path], ['back', row.back_path], ['face', facePath]]) {
     if (!path) continue;
     try {
       const { data: blob, error: dlErr } = await supabase.storage.from('cards').download(path);

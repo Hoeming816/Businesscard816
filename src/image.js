@@ -137,3 +137,11 @@ export async function wholePhoto(canvas) {
   out.getContext('2d').drawImage(canvas, 0, 0, size.width, size.height);
   return canvasResult(out);
 }
+
+/** A square face photo: the part of `canvas` at { sx, sy, size }, scaled to `out` pixels. */
+export async function cropSquare(canvas, { sx, sy, size }, out = 512) {
+  const c = document.createElement('canvas');
+  c.width = c.height = Math.min(out, Math.round(size));
+  c.getContext('2d').drawImage(canvas, sx, sy, size, size, 0, 0, c.width, c.height);
+  return canvasResult(c);
+}

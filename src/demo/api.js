@@ -273,7 +273,7 @@ export async function acceptShare(share) {
   if (!c) throw new Error('The card is no longer available.');
   const keep = ['full_name', 'job_title', 'company', 'department', 'emails', 'phones', 'website', 'address', 'city', 'region',
     'country', 'card_text', 'contact_type', 'industry', 'business_category', 'job_function', 'seniority', 'opportunities', 'tags',
-    'front_path', 'back_path'];
+    'front_path', 'back_path', 'face_path'];
   const copy = { id: newId('c'), workspace_id: c.workspace_id, created_by: uid(), is_private: true, created_at: now(), updated_at: now() };
   for (const k of keep) copy[k] = clone(c[k] ?? null);
   db.contacts.push(copy);
