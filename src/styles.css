@@ -1150,12 +1150,12 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .thumb { position: relative; overflow: visible; }
 .thumb > img:not(.thumb-face) { border-radius: 6px; }
 .thumb .thumb-face {
-  /* Beats .thumb img (100% x 100%) so the face stays a small circle on the card's corner. */
-  position: absolute; right: -8px; bottom: -8px; width: 40px; height: 40px; aspect-ratio: 1; border-radius: 50%;
+  /* Beats .thumb img (100% x 100%): the face is a round picture laid over the middle of the card. */
+  position: absolute; inset: 0; margin: auto; width: 62px; height: 62px; aspect-ratio: 1; border-radius: 50%;
   object-fit: cover; border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(16, 24, 40, .25); background: var(--surface-3);
 }
 @media (max-width: 720px) {
-  .thumb .thumb-face { width: 34px; height: 34px; right: -6px; bottom: -6px; }
+  .thumb .thumb-face { width: 50px; height: 50px; }
 }
 .face-row { display: flex; align-items: center; gap: 14px; }
 .face-avatar {
