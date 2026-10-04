@@ -916,7 +916,6 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   .group-tab { margin-left: 10px; font-size: 14px; }
   .row { grid-template-columns: 72px minmax(0, 1fr) 16px; gap: 12px; padding: 12px; }
   .thumb { width: 72px; }
-  .thumb-face { width: 34px; height: 34px; right: -6px; bottom: -6px; }
   .row-contact { grid-column: 2 / 3; grid-row: 2; font-size: 12px; margin-top: -4px; }
   .row-email { display: none; }
   .row-chev { grid-column: 3; grid-row: 1 / span 2; }
@@ -1150,9 +1149,13 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 /* Face photo on a business card contact */
 .thumb { position: relative; overflow: visible; }
 .thumb > img:not(.thumb-face) { border-radius: 6px; }
-.thumb-face {
-  position: absolute; right: -8px; bottom: -8px; width: 40px; height: 40px; border-radius: 50%;
+.thumb .thumb-face {
+  /* Beats .thumb img (100% x 100%): the face is a round picture laid over the middle of the card. */
+  position: absolute; inset: 0; margin: auto; width: 62px; height: 62px; aspect-ratio: 1; border-radius: 50%;
   object-fit: cover; border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(16, 24, 40, .25); background: var(--surface-3);
+}
+@media (max-width: 720px) {
+  .thumb .thumb-face { width: 50px; height: 50px; }
 }
 .face-row { display: flex; align-items: center; gap: 14px; }
 .face-avatar {
