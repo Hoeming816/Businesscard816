@@ -7,7 +7,7 @@ import { canEditInteraction } from '../perms.js';
 import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
-import MeetingView from './MeetingView.jsx';
+import MeetingView, { MinutesLanguage } from './MeetingView.jsx';
 import { Icon, EmptyState, Spinner, ConfirmButton, Pill, formatDate, formatDuration } from './ui.jsx';
 
 const SHOW = [
@@ -284,6 +284,9 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
           <option value="">No contact</option>
           {mine.map((c) => <option key={c.id} value={c.id}>{[c.full_name, c.company].filter(Boolean).join(' · ') || 'Unnamed card'}</option>)}
         </select>
+      </div>
+      <div className="field">
+        <MinutesLanguage disabled={!!last} />
       </div>
       <div className="field">
         <span className="label">Recording</span>

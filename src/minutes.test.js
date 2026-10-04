@@ -137,3 +137,11 @@ describe('follow-up tracking', () => {
     expect(normaliseMinutes({ follow_up: out }).follow_up).toHaveLength(3);
   });
 });
+
+describe('minutes language', () => {
+  it('keeps English or Chinese and defaults to English', () => {
+    expect(normaliseMinutes({ language: 'Chinese' }).language).toBe('Chinese');
+    expect(normaliseMinutes({ language: 'Klingon' }).language).toBe('English');
+    expect(normaliseMinutes().language).toBe('English');
+  });
+});
