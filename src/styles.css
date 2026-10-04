@@ -1031,6 +1031,16 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .home-tile:active { transform: scale(.98); }
 .home-tile img { width: 100%; max-width: 132px; aspect-ratio: 1; object-fit: contain; }
 .home-back { justify-self: start; margin-bottom: -8px; }
+/* The selection page fills the space between the bars and centres the tiles. */
+.home-pick { min-height: calc(100vh - var(--topbar-h) - var(--safe-t) - 72px); min-height: calc(100dvh - var(--topbar-h) - var(--safe-t) - 72px); align-content: center; }
+.home-pick .home-tiles { margin: 0 auto; }
+@media (min-width: 721px) { .home-pick .home-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 880px; } }
+@media (max-width: 720px) {
+  .home-pick {
+    min-height: calc(100vh - 54px - var(--safe-t) - var(--tabbar-h) - var(--safe-b) - 44px);
+    min-height: calc(100dvh - 54px - var(--safe-t) - var(--tabbar-h) - var(--safe-b) - 44px);
+  }
+}
 .minutes-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; max-width: 860px; }
 .minutes-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .minutes-row {
