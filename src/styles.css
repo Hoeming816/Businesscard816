@@ -1394,3 +1394,19 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
   .todo-head { flex-wrap: wrap; row-gap: 2px; }
   .todo-notify span { display: none; }
 }
+
+/* To Do reminders on the home page and in Notifications */
+.home-reminders {
+  width: 100%; max-width: 460px; margin: 0 auto 20px; padding: 12px 14px; display: grid; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--hot); border-radius: 14px; box-shadow: var(--shadow-sm);
+}
+@media (min-width: 721px) { .home-reminders { max-width: 880px; } }
+.home-reminders-h { display: flex; align-items: center; gap: 6px; font-size: 15px; margin: 0; }
+.home-reminders > .link { justify-self: start; }
+.reminder-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.reminder-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.reminder-item:first-child { border-top: 0; }
+.reminder-item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.reminder-icon { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--hot) 14%, transparent); color: var(--hot); }
+.reminder-item.is-later { color: var(--ink-2); }
+.reminder-item.is-later .reminder-icon { background: var(--surface-2); color: var(--ink-3); }

@@ -270,6 +270,31 @@ export function dueReminders(tasks, now, shown, lookbackMin = 60) {
   return out.sort((a, b) => a.at - b.at);
 }
 
+/**
+ * For the home page and the bell: `active` holds tasks not done whose reminder has gone off
+ * (the latest one per task, unless it was dismissed on this device); `later` holds tasks
+ * whose first reminder is still to come today. Both sorted by time.
+ */
+export function reminderBoard(tasks, now, dismissed = new Set()) {
+  const today = toISODate(now);
+  const active = [];
+  const later = [];
+  for (const t of tasks) {
+    const times = reminderTimes(t);
+    if (!times.length) continue;
+    const past = times.filter((r) => r.at <= now);
+    if (past.length) {
+      const latest = past.reduce((a, b) => (b.at > a.at ? b : a));
+      if (!dismissed.has(latest.key)) active.push({ task: t, ...latest });
+      continue;
+    }
+    const next = times.reduce((a, b) => (b.at < a.at ? b : a));
+    if (toISODate(next.at) === today) later.push({ task: t, ...next });
+  }
+  const byTime = (a, b) => a.at - b.at;
+  return { active: active.sort(byTime), later: later.sort(byTime) };
+}
+
 export function reminderText(task, today) {
   const due = dueLabel(task, today);
   return due ? `Due ${due.replace(/^Today /, 'today at ').replace(/^Today$/, 'today').replace(/^Tomorrow/, 'tomorrow')}` : '';

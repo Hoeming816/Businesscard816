@@ -5,6 +5,7 @@ import Minutes from './Minutes.jsx';
 import Todo from './Todo.jsx';
 import { Icon } from './ui.jsx';
 import { useBack } from '../back.js';
+import { ReminderList } from './TaskReminders.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
 import todoIcon from '../assets/tab-todo-list.png';
@@ -29,7 +30,7 @@ export function resetHomeSection() { try { sessionStorage.removeItem(SECTION_KEY
  * them (the default): just the card list.
  */
 export default function Home() {
-  const { can, tasks } = useApp();
+  const { can, tasks, reminders } = useApp();
   const [section, setSectionRaw] = useState(readSection);
   const picker = can('meeting') || can('todo') || can('notes');
   const sections = SECTIONS.filter((s) => !s.feature || can(s.feature));
@@ -42,7 +43,7 @@ export default function Home() {
   if (!picker) return <div className="home"><Contacts /></div>;
 
   if (!inSection) {
-    return <HomePick sections={sections} onPick={setSection} counts={{ todo: tasks.filter((t) => t.status !== 'done').length }} />;
+    return <HomePick sections={sections} onPick={setSection} reminders={can('todo') ? reminders : null} counts={{ todo: tasks.filter((t) => t.status !== 'done').length }} />;
   }
   return (
     <div className="home">
@@ -56,12 +57,19 @@ export default function Home() {
 }
 
 /** The selection page, centred in the screen. */
-function HomePick({ sections, onPick, counts }) {
+function HomePick({ sections, onPick, counts, reminders }) {
   // Signing in can leave the page scrolled (the phone keyboard); start at the top.
   useEffect(() => { window.scrollTo(0, 0); }, []);
   return (
     <div className="home home-pick">
       <h1 className="sr-only">Choose where to go</h1>
+      {reminders && (reminders.active.length > 0 || reminders.later.length > 0) && (
+        <section className="home-reminders" aria-label="Reminders">
+          <h2 className="home-reminders-h"><Icon name="bell" size={16} /> Reminders</h2>
+          <ReminderList board={reminders} />
+          <button type="button" className="link small" onClick={() => onPick('todo')}>Open To Do List</button>
+        </section>
+      )}
       <div className="home-tiles">
         {sections.map((s) => (
           <button key={s.value} type="button" className="home-tile" onClick={() => onPick(s.value)}

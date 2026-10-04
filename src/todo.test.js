@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   carriedFrom, cleanTask, completion, formatLongDay, dueLabel, dueReminders, filterTasks, firstDate, formatTime, groupTasks, isOverdue,
-  myDay, nextDate, occurrences, parseQuickAdd, repeatLabel, rollForward, smartReminders,
+  myDay, nextDate, occurrences, parseQuickAdd, reminderBoard, repeatLabel, rollForward, smartReminders,
 } from './todo.js';
 
 // Sunday 4 October 2026, 09:30 local time.
@@ -149,6 +149,17 @@ describe('due dates and reminders', () => {
     expect(late.map((r) => [r.minutes, r.keys.length])).toEqual([[0, 2]]);
     // no time: reminders count from 09:00
     expect(dueReminders([{ id: 't2', due_on: TODAY, reminders: [0] }], NOW, new Set()).length).toBe(1);
+  });
+  it('keeps reminders that went off on the board until done or put away', () => {
+    const fired = { id: 'a', due_on: TODAY, due_time: '09:20', reminders: [15, 0] };
+    const later = { id: 'b', due_on: TODAY, due_time: '16:00', reminders: [15] };
+    const tomorrow = { id: 'c', due_on: '2026-10-05', due_time: '10:00', reminders: [0] };
+    const old = { id: 'd', due_on: '2026-10-01', reminders: [0] };
+    const board = reminderBoard([later, fired, tomorrow, old, { ...fired, id: 'e', status: 'done' }], NOW);
+    expect(board.active.map((r) => [r.task.id, r.minutes])).toEqual([['d', 0], ['a', 0]]);
+    expect(board.later.map((r) => r.task.id)).toEqual(['b']);
+    const put = reminderBoard([fired], NOW, new Set([board.active[1].key]));
+    expect(put.active).toEqual([]);
   });
 });
 
