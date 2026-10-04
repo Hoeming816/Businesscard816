@@ -38,6 +38,16 @@ const db = {
       new_contact_id: null, created_at: now(), responded_at: null,
     });
   }
+  // And one card Alex shared that Maria accepted, for the notifications list.
+  const mine = db.contacts.find((x) => x.workspace_id === 'w-north' && x.created_by === ME && x.id !== c?.id);
+  if (mine) {
+    const at = new Date(Date.now() - 3 * 3600e3).toISOString();
+    db.shares.push({
+      id: 's-replied', workspace_id: 'w-north', contact_id: mine.id, sender_id: ME, recipient_id: 'u-maria', status: 'accepted',
+      contact_name: mine.full_name || '', contact_title: mine.job_title || null, contact_company: mine.company || null,
+      new_contact_id: null, created_at: at, responded_at: at,
+    });
+  }
 }
 const listeners = new Set();
 
@@ -260,6 +270,14 @@ const shareOut = (s) => {
   const p = profile(s.sender_id) || {};
   return { ...clone(s), sender_name: p.full_name || p.username || 'A member' };
 };
+export async function listShareReplies(me) {
+  await tick();
+  return db.shares
+    .filter((s) => s.sender_id === me && ['accepted', 'declined'].includes(s.status))
+    .sort((a, b) => (b.responded_at || '').localeCompare(a.responded_at || ''))
+    .slice(0, 20)
+    .map((s) => { const r = profile(s.recipient_id) || {}; return { ...shareOut(s), recipient_name: r.full_name || r.username || 'A member' }; });
+}
 export async function shareContact(contact, recipientId) {
   needFeature('share', 'Sharing');
   await sleep(200);

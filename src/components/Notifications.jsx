@@ -1,0 +1,52 @@
+import { Icon, Modal, formatDate } from './ui.jsx';
+
+/** Everything waiting for me (invitations, shared cards) plus answers to cards I shared. */
+export default function Notifications({ invites, shares, replies, seenAt, onOpen, onClose }) {
+  const waiting = invites.length + shares.length;
+  return (
+    <Modal title="Notifications" onClose={onClose} className="notifications">
+      <h3 className="notif-head">Waiting for you</h3>
+      {waiting ? (
+        <ul className="notif-list">
+          {invites.map((i) => (
+            <li key={`i-${i.workspace_id}`}>
+              <span className="incoming-icon" aria-hidden="true"><Icon name="users" size={18} /></span>
+              <span className="grow">
+                <strong>{i.inviter_name || 'Someone'}</strong> invited you to their team.
+                <span className="block muted small">{formatDate(i.invited_at)}</span>
+              </span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpen({ kind: 'invite', id: i.workspace_id })}>Answer</button>
+            </li>
+          ))}
+          {shares.map((s) => (
+            <li key={`s-${s.id}`}>
+              <span className="incoming-icon" aria-hidden="true"><Icon name="cards" size={18} /></span>
+              <span className="grow">
+                <strong>{s.sender_name}</strong> shared {s.contact_name || 'a card'} with you.
+                <span className="block muted small">{formatDate(s.created_at)}</span>
+              </span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpen({ kind: 'share', id: s.id })}>Answer</button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted small">Nothing is waiting for you.</p>}
+
+      {replies.length > 0 && (
+        <>
+          <h3 className="notif-head">Cards you shared</h3>
+          <ul className="notif-list">
+            {replies.map((r) => (
+              <li key={`r-${r.id}`} className={r.responded_at > seenAt ? 'is-new' : ''}>
+                <span className="incoming-icon" aria-hidden="true"><Icon name={r.status === 'accepted' ? 'check' : 'x'} size={18} /></span>
+                <span className="grow">
+                  <strong>{r.recipient_name}</strong> {r.status === 'accepted' ? 'accepted' : 'declined'} {r.contact_name || 'your card'}.
+                  <span className="block muted small">{formatDate(r.responded_at)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Modal>
+  );
+}

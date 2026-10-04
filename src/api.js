@@ -324,6 +324,19 @@ function flattenShare(s) {
   return { ...rest, sender_name: sender?.full_name || sender?.username || 'A member' };
 }
 
+/** Answers to cards I shared, newest first: shares with recipient_name. */
+export async function listShareReplies(uid) {
+  const { data, error } = await supabase
+    .from('card_shares')
+    .select(`${SHARE_SELECT}, recipient:profiles!card_shares_recipient_id_fkey(username, full_name)`)
+    .eq('sender_id', uid)
+    .in('status', ['accepted', 'declined'])
+    .order('responded_at', { ascending: false })
+    .limit(20);
+  fail(error);
+  return (data || []).map(({ recipient, ...s }) => ({ ...flattenShare(s), recipient_name: recipient?.full_name || recipient?.username || 'A member' }));
+}
+
 /** Offer a card to a member of the same workspace. */
 export async function shareContact(contact, recipientId) {
   const { data, error } = await supabase
