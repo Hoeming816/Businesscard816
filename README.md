@@ -1,4 +1,4 @@
-# Nomiqo by Aspencom
+# Nomiqo
 
 Scan, file and follow up on business cards. Photograph the front and back of a card, let Claude read it, review the details, and file the contact. Each card is visible only to the member who saved it, who can share a copy with a teammate. Every contact keeps a timeline of meetings, calls and recorded conversations, with AI summaries.
 

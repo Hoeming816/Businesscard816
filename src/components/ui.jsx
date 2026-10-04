@@ -71,14 +71,13 @@ export function Icon({ name, size = 18, className = '', strokeWidth = 1.8, title
   );
 }
 
-export function Logo({ compact = false, byline = false, tagline = false }) {
+export function Logo({ compact = false, tagline = false }) {
   return (
     <span className="logo">
       <img className="logo-mark" src={markUrl} width="30" height="30" alt="" />
       {!compact && (
         <span className="logo-text">
           <span className="logo-word">Nomi<span className="logo-flow">qo</span></span>
-          {byline && <span className="logo-by">by Aspencom</span>}
           {tagline && <span className="logo-tagline">Scan. Organize. Connect.</span>}
         </span>
       )}
