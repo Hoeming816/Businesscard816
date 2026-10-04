@@ -487,7 +487,7 @@ export async function downloadRecording(path) {
 }
 
 /**
- * Server-side transcription, in `output` (English or Chinese): { text, segments: [{ t: seconds, text, orig? }], language }.
+ * Server-side transcription, in `output` (English, Chinese or Tagalog): { text, segments: [{ t: seconds, text, orig? }], language }.
  * A line spoken in another language keeps what was said in orig. Throws with code 'not_configured' if it is off. */
 export async function transcribe(blob, language, ext, output = 'English') {
   const form = new FormData();
@@ -504,7 +504,7 @@ export async function transcribe(blob, language, ext, output = 'English') {
   }
 }
 
-/** Translates a saved timed transcript into `output` (English or Chinese), keeping what was said in orig. */
+/** Translates a saved timed transcript into `output` (English, Chinese or Tagalog), keeping what was said in orig. */
 export async function translateTranscript(segments, output) {
   const data = await invoke('meeting-notes', { action: 'translate', segments, output });
   return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [] };

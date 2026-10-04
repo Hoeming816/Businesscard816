@@ -269,7 +269,7 @@ export function Actions({ items, canEdit, onStatus }) {
   );
 }
 
-/** Which language the minutes and transcript are written in (English or Chinese), kept on this device. */
+/** Which language the minutes and transcript are written in (English, Chinese or Tagalog), kept on this device. */
 export function MinutesLanguage({ compact = false, disabled = false }) {
   const [v, setV] = useState(minutesLanguage);
   return (

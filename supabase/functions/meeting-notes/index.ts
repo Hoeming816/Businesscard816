@@ -2,7 +2,7 @@
 // meeting minutes and answers questions about a meeting, and optionally
 // transcribes a recording with Whisper through the Vercel AI Gateway
 // (AI_GATEWAY_API_KEY), or OpenAI directly (OPENAI_API_KEY). Whatever was spoken,
-// everything comes out in English, or Chinese when that is chosen.
+// everything comes out in English, or Chinese or Tagalog when that is chosen.
 import { HttpError, json, requireCaller, requireFeature, serve } from "../_shared/http.ts";
 import { structuredReply } from "../_shared/claude.ts";
 import { ACTION_PRIORITIES, LEAD_STATUSES, MEETING_TYPES } from "../_shared/taxonomy.js";
@@ -10,7 +10,7 @@ import { ACTION_PRIORITIES, LEAD_STATUSES, MEETING_TYPES } from "../_shared/taxo
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // Whisper's upload limit
 
 // The language the minutes and transcript are written in, whatever was spoken.
-const OUTPUTS: Record<string, string> = { English: "English", Chinese: "Simplified Chinese" };
+const OUTPUTS: Record<string, string> = { English: "English", Chinese: "Simplified Chinese", Tagalog: "Tagalog (Filipino)" };
 const outputOf = (v: unknown) => OUTPUTS[String(v ?? "")] ?? "English";
 const writeIn = (out: string) =>
   `Write in ${out}. If the conversation was held in another language or mixes languages (for example Tagalog or Taglish, Mandarin, Malay, English), translate it into natural ${out}. Keep people's names, company and product terms, and numbers exactly as spoken.`;
@@ -318,12 +318,12 @@ async function viaOpenAI(key: string, audio: File, language: string) {
 
 
 // Meetings are often held in Tagalog or Taglish, or Mandarin. The transcript is
-// shown in the chosen output language (English unless Chinese is picked), line
+// shown in the chosen output language (English unless another is picked), line
 // by line with the same timestamps, and each translated line keeps what was
 // actually said in "orig" for the Original view.
 const translateSystem = (out: string) => `You translate lines of a business meeting transcript into natural ${out}.
 
-You get numbered lines from speech recognition. Return "language": the main language spoken, as its English name ("Tagalog", "English", "Mandarin"...; for Tagalog mixed with English say "Tagalog"). Return "lines": exactly one ${out} line per input line, in the same order, so line n of your output is the translation of line n of the input. A line already in ${out} stays as it is. Translate mixed-language lines fully into ${out}. Keep people's names, company and product terms, and numbers exactly as spoken. Do not merge, split, drop or summarise lines. Speech recognition makes mistakes, so translate for meaning.`;
+You get numbered lines from speech recognition. Return "language": the main language spoken, as its English name ("Tagalog", "English", "Mandarin"...; for Tagalog mixed with English say "Tagalog"). Return "lines": exactly one ${out} line per input line, in the same order, so line n of your output is the translation of line n of the input. A line already in ${out} stays as it is${out.startsWith("Tagalog") ? ", and so does a Taglish line (Tagalog mixed with English)" : ""}. Translate other mixed-language lines fully into ${out}. Keep people's names, company and product terms, and numbers exactly as spoken. Do not merge, split, drop or summarise lines. Speech recognition makes mistakes, so translate for meaning.`;
 
 const BATCH = 120;
 

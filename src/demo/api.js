@@ -479,7 +479,7 @@ const DEMO_LINES = [
   [34.5, 'The client still has to approve the revised layout, which is a risk to the schedule.', 'Kailangan pang i-approve ng client ang revised layout, risk ito sa schedule.', '客户仍需批准修改后的布局，这对进度是个风险。'],
   [41, 'Let us meet again next Monday to check progress.', 'Magkita ulit tayo sa Monday para i-check ang progress.', '下星期一再开会检查进度。'],
 ];
-const demoLine = (output) => ([t, en, orig, zh]) => ({ t, text: output === 'Chinese' ? zh : en, orig });
+const demoLine = (output) => ([t, en, orig, zh]) => (output === 'Tagalog' ? { t, text: orig } : { t, text: output === 'Chinese' ? zh : en, orig });
 
 export async function transcribe(_blob, _language, _ext, output = 'English') {
   needFeature('meeting', 'Meeting');
