@@ -82,8 +82,8 @@ export default function AuthScreen({ onSuspended }) {
         </div>
       </div>
       <div className="auth-panel">
-        <img className="auth-lockup" src={lockupUrl} alt="Nomiqo by Aspencom. Scan. Organize. Connect." />
-        <span className="auth-logo-dark"><Logo byline tagline /></span>
+        <img className="auth-lockup" src={lockupUrl} alt="Nomiqo. Scan. Organize. Connect." />
+        <span className="auth-logo-dark"><Logo tagline /></span>
         <h1 className="auth-title">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h1>
         <p className="muted auth-sub">
           {mode === 'signin'

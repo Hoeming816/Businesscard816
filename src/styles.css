@@ -321,7 +321,6 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .logo-text { display: inline-flex; flex-direction: column; line-height: 1.1; }
 .logo-flow { color: #1a73f5; background: linear-gradient(90deg, #1668f2, #19b8f0); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .logo-tagline { font-family: 'Montserrat', var(--font-head); margin-top: 6px; font-size: 12px; font-weight: 500; letter-spacing: .22em; color: var(--ink-2); }
-.logo-by { font-family: 'Montserrat', var(--font-head); font-size: 12px; font-weight: 500; color: var(--ink-3); letter-spacing: .01em; }
 .logo-word { font-family: 'Montserrat', var(--font-head); font-weight: 700; font-size: 20px; letter-spacing: -.02em; color: var(--ink); }
 
 /* ---------------------------------------------------------------- boot + auth */
