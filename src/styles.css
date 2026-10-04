@@ -1279,6 +1279,11 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .task-row.is-done .task-title { text-decoration: line-through; color: var(--ink-3); font-weight: 500; }
 .task-row.is-done { box-shadow: none; background: var(--surface-2); }
 
+.task-delete { flex: none; display: grid; place-items: center; width: 36px; align-self: stretch; background: none; border: 0; color: var(--ink-3); cursor: pointer; border-radius: 8px; }
+.task-delete:hover, .task-delete:focus-visible { color: var(--danger); }
+.task-row-confirm { gap: 8px; padding: 10px 12px; border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--surface)); }
+.task-confirm-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
 /* The done checkbox, at the end of the row, big enough for a thumb. */
 .task-check { flex: none; display: grid; place-items: center; width: 52px; align-self: stretch; cursor: pointer; position: relative; }
 .task-check input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }

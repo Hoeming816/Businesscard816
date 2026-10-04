@@ -3,10 +3,11 @@ import { useApp } from '../context.js';
 import { carriedFrom, completion, dueLabel, formatLongDay, isDone, isOverdue, priorityTone, repeatLabel, subtaskProgress } from '../todo.js';
 import { Icon } from './ui.jsx';
 
-/** One task: what, when, and the done checkbox at the end. */
+/** One task: what, when, a delete button (your own tasks) and the done checkbox at the end. */
 export default function TaskRow({ task, today, flash, onOpen }) {
-  const { api, uid, toast, upsertTask } = useApp();
+  const { api, uid, toast, upsertTask, removeTask } = useApp();
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false); // "Delete this task?" showing
   const done = isDone(task);
   const from = carriedFrom(task, today);
   const late = isOverdue(task);
@@ -29,6 +30,28 @@ export default function TaskRow({ task, today, flash, onOpen }) {
     }
   };
 
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.deleteTask(task.id);
+      removeTask(task.id);
+      toast('Task deleted.');
+    } catch (e) {
+      toast(e.message, 'error');
+      setBusy(false);
+    }
+  };
+
+  if (asking) {
+    return (
+      <li className="task-row task-row-confirm" role="group" aria-label="Delete task">
+        <span className="task-confirm-msg">Delete <b>{task.title}</b>?</span>
+        <button type="button" className="btn btn-danger btn-sm" autoFocus disabled={busy} onClick={remove}>{busy ? 'Deleting…' : 'Delete'}</button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setAsking(false)}>Cancel</button>
+      </li>
+    );
+  }
+
   return (
     <li className={`task-row ${done ? 'is-done' : ''} ${flash ? 'is-new' : ''} prio-${task.priority.toLowerCase()}`}>
       <button type="button" className="task-main" onClick={() => onOpen(task)}>
@@ -45,6 +68,11 @@ export default function TaskRow({ task, today, flash, onOpen }) {
           {!mine && <span><Icon name="user" size={12} /> From {task.assigned_by_name}</span>}
         </span>
       </button>
+      {mine && (
+        <button type="button" className="task-delete" onClick={() => setAsking(true)} disabled={busy} aria-label={`Delete: ${task.title}`} title="Delete task">
+          <Icon name="trash" size={17} />
+        </button>
+      )}
       <label className="task-check" title={done ? 'Mark as not done' : 'Mark as done'}>
         <input type="checkbox" checked={done} disabled={busy} onChange={toggle} aria-label={`${done ? 'Not done' : 'Done'}: ${task.title}`} />
         <span className="task-check-box" aria-hidden="true"><Icon name="check" size={16} strokeWidth={2.6} /></span>
