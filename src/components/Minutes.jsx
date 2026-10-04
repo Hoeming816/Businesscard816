@@ -164,7 +164,6 @@ export default function Minutes() {
                       stage={stage}
                       busy={making !== null}
                       onMakeMinutes={() => makeMinutes(i)}
-                      onShare={() => share(i)}
                       onDelete={() => { setExpanded(null); remove(i); }}
                       onDeleteRecording={() => removeRecording(i)}
                       onChanged={load}
