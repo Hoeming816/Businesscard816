@@ -267,22 +267,35 @@ export function Actions({ items, canEdit, onStatus }) {
 
 function Transcript({ i, onJump }) {
   const segs = Array.isArray(i.segments) ? i.segments : [];
+  // Lines spoken in another language (Tagalog, Chinese...) are shown in English;
+  // "Original" shows what was actually said.
+  const translated = segs.some((s) => s.orig);
+  const [original, setOriginal] = useState(false);
   if (segs.length) {
+    const text = (s) => (original && s.orig) || s.text;
     return (
-      <ol className="transcript-lines">
-        {segs.map((s, k) => (
-          <li key={k}>
-            {onJump ? (
-              <button type="button" className="transcript-line" onClick={() => onJump(s.t)} aria-label={`Play from ${lineTime(i, s.t)}`}>
-                <span className="mono small transcript-time">{lineTime(i, s.t)}</span>
-                <span>{s.text}</span>
-              </button>
-            ) : (
-              <span className="transcript-line"><span className="mono small transcript-time">{lineTime(i, s.t)}</span><span>{s.text}</span></span>
-            )}
-          </li>
-        ))}
-      </ol>
+      <>
+        {translated && (
+          <div className="chips transcript-lang" role="group" aria-label="Transcript language">
+            <button type="button" className={`chip ${!original ? 'is-on' : ''}`} aria-pressed={!original} onClick={() => setOriginal(false)}>English</button>
+            <button type="button" className={`chip ${original ? 'is-on' : ''}`} aria-pressed={original} onClick={() => setOriginal(true)}>Original</button>
+          </div>
+        )}
+        <ol className="transcript-lines">
+          {segs.map((s, k) => (
+            <li key={k}>
+              {onJump ? (
+                <button type="button" className="transcript-line" onClick={() => onJump(s.t)} aria-label={`Play from ${lineTime(i, s.t)}`}>
+                  <span className="mono small transcript-time">{lineTime(i, s.t)}</span>
+                  <span>{text(s)}</span>
+                </button>
+              ) : (
+                <span className="transcript-line"><span className="mono small transcript-time">{lineTime(i, s.t)}</span><span>{text(s)}</span></span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </>
     );
   }
   if (i.transcript) return <p className="transcript-plain">{i.transcript}</p>;

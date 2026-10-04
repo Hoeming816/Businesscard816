@@ -1,7 +1,8 @@
 // meeting-notes: summarises notes + transcript with Claude, writes typed
 // meeting minutes and answers questions about a meeting, and optionally
 // transcribes a recording with Whisper through the Vercel AI Gateway
-// (AI_GATEWAY_API_KEY), or OpenAI directly (OPENAI_API_KEY).
+// (AI_GATEWAY_API_KEY), or OpenAI directly (OPENAI_API_KEY), translating
+// a transcript in another language into English. Everything comes out in English.
 import { HttpError, json, requireCaller, requireFeature, serve } from "../_shared/http.ts";
 import { structuredReply } from "../_shared/claude.ts";
 import { ACTION_PRIORITIES, LEAD_STATUSES, MEETING_TYPES } from "../_shared/taxonomy.js";
@@ -30,7 +31,7 @@ Return:
 - follow_up_on: a suggested next follow-up date as YYYY-MM-DD, based on what was agreed (or a sensible default of about one week after the meeting date when a follow-up is implied). Empty string if no follow-up makes sense.
 - lead_status: the most fitting status from ${LEAD_STATUSES.map((s) => `"${s}"`).join(", ")} after this conversation, or an empty string if the notes give no signal.
 
-Write summary, key_points and action_items in the language the conversation was held in. If it is in Chinese, write in Chinese; if it mixes languages (for example English and Chinese), keep that mix as the speakers did, and keep names, product terms and numbers exactly as spoken. Do not translate.
+Write summary, key_points and action_items in English. If the conversation was held in another language or mixes languages (for example Tagalog or Taglish, Chinese, Malay), translate it into natural English. Keep names, company and product terms, and numbers exactly as spoken.
 
 Leave out small talk, jokes and topics unrelated to the business discussed.
 
@@ -148,7 +149,7 @@ The meeting type tells you what to concentrate on; give those things the most ca
 
 Leave out everything that is not business: small talk, jokes and banter, personal chat, and topics unrelated to the meeting's purpose. They must not appear in any field, not even as an agenda item or a passing mention. The full transcript is kept separately, so nothing is lost by leaving them out.
 
-Write in the language the meeting was held in. If it is in Chinese, write in Chinese; if it mixes languages (for example English and Chinese), keep that mix as the speakers did, and keep names, product terms and numbers exactly as spoken. Do not translate.
+Write everything in English. If the meeting was held in another language or mixes languages (for example Tagalog or Taglish, Chinese, Malay), translate it into natural English. Keep names, company and product terms, and numbers exactly as spoken.
 
 Only use what is in the transcript and notes; never invent names, dates, figures or decisions. Leave a field empty rather than guess. A transcript from speech recognition may contain recognition errors, so read it for meaning.`;
 
@@ -265,7 +266,7 @@ function toBase64(bytes: Uint8Array) {
   return btoa(bin);
 }
 
-type Transcript = { text: string; segments: { t: number; text: string }[] };
+type Transcript = { text: string; segments: { t: number; text: string; orig?: string }[]; language: string };
 
 // Timed lines of the transcript, as { t: seconds from the start, text }.
 function toSegments(raw: unknown, startKey: string): Transcript["segments"] {
@@ -293,7 +294,7 @@ async function viaGateway(key: string, audio: File, language: string) {
   });
   if (!res.ok) throw new Error(`gateway ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return { text: String(data.text ?? ""), segments: toSegments(data.segments, "startSecond") };
+  return { text: String(data.text ?? ""), segments: toSegments(data.segments, "startSecond"), language: String(data.language ?? "") };
 }
 
 async function viaOpenAI(key: string, audio: File, language: string) {
@@ -310,7 +311,47 @@ async function viaOpenAI(key: string, audio: File, language: string) {
   });
   if (!res.ok) throw new Error(`openai ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return { text: String(data.text ?? ""), segments: toSegments(data.segments, "start") };
+  return { text: String(data.text ?? ""), segments: toSegments(data.segments, "start"), language: String(data.language ?? "") };
+}
+
+
+// Meetings are often held in Tagalog or Taglish (or Chinese, Malay...). The
+// transcript is shown in English, line by line with the same timestamps, and
+// each line keeps what was actually said in "orig" for the Original view.
+const TRANSLATE_SYSTEM = `You translate lines of a business meeting transcript into natural English.
+
+You get numbered lines from speech recognition. Return "language": the main language spoken, as its English name ("Tagalog", "English", "Chinese"...; for Tagalog mixed with English say "Tagalog"). Return "lines": exactly one English line per input line, in the same order, so line n of your output is the translation of line n of the input. A line already in English stays as it is. Translate Taglish fully into English. Keep names, company and product terms, and numbers exactly as spoken. Do not merge, split, drop or summarise lines. Speech recognition makes mistakes, so translate for meaning.`;
+
+const BATCH = 120;
+
+async function toEnglish(r: Transcript): Promise<Transcript> {
+  // Always checked: speech recognition often labels Taglish as English.
+  const lines = r.segments.length ? r.segments.map((x) => x.text) : [r.text];
+  const english: string[] = [];
+  let language = r.language;
+  for (let i = 0; i < lines.length; i += BATCH) {
+    const part = lines.slice(i, i + BATCH);
+    try {
+      const out = await structuredReply<{ language: string; lines: string[] }>({
+        system: TRANSLATE_SYSTEM,
+        content: [{ type: "text", text: part.map((l, k) => `${k + 1}. ${l}`).join("\n") }],
+        schema: {
+          type: "object", additionalProperties: false, required: ["language", "lines"],
+          properties: { language: { type: "string" }, lines: { type: "array", items: { type: "string" } } },
+        },
+        effort: "low",
+      });
+      if (i === 0) language = String(out.language ?? "") || language;
+      const ok = Array.isArray(out.lines) && out.lines.length === part.length;
+      english.push(...part.map((l, k) => (ok ? String(out.lines[k] ?? "").trim() || l : l)));
+    } catch (e) {
+      console.error("translation error", e instanceof Error ? e.message : e);
+      english.push(...part); // keep the original rather than lose the transcript
+    }
+  }
+  if (!r.segments.length) return { text: english[0] ?? r.text, segments: [], language };
+  const segments = r.segments.map((x, k) => (english[k] && english[k] !== x.text ? { ...x, text: english[k], orig: x.text } : x));
+  return { text: segments.map((x) => x.text).join(" "), segments, language };
 }
 
 async function transcribe(form: FormData) {
@@ -330,8 +371,8 @@ async function transcribe(form: FormData) {
   if (openaiKey) attempts.push([openaiKey, viaOpenAI]);
   for (const [key, run] of attempts) {
     try {
-      const r = await run(key, audio, language);
-      return { transcript: r.text.trim(), segments: r.segments };
+      const r = await toEnglish(await run(key, audio, language));
+      return { transcript: r.text.trim(), segments: r.segments, language: r.language };
     } catch (e) {
       console.error("transcription error", e instanceof Error ? e.message : e);
     }

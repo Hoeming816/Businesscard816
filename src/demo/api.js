@@ -464,22 +464,23 @@ export async function downloadRecording(path) {
   if (!url) throw new Error('Could not load the recording');
   return (await fetch(url)).blob();
 }
+// A Taglish meeting, as the live app shows it: English, with what was said kept as "orig".
 const DEMO_LINES = [
-  [0, 'Thanks for making the time today. Let us go through the fibre rollout for the two Singapore sites.'],
-  [7.5, 'Peter, can you submit the bill of materials by Wednesday?'],
-  [12, 'Yes, I will submit the BOM by Wednesday.'],
-  [16.5, 'We agreed to proceed with Supplier A for the fibre.'],
-  [22, 'Installation manpower goes from six to eight technicians so we finish before Friday.'],
-  [29, 'Engineering will complete the T3 site survey by the tenth.'],
-  [34.5, 'The client still has to approve the revised layout, which is a risk to the schedule.'],
-  [41, 'Let us meet again next Monday to check progress.'],
+  [0, 'Thanks for making the time today. Let us go through the fibre rollout for the two Singapore sites.', 'Salamat sa oras ninyo ngayon. Pag-usapan natin ang fibre rollout para sa dalawang Singapore sites.'],
+  [7.5, 'Peter, can you submit the bill of materials by Wednesday?', 'Peter, kaya mo bang i-submit ang bill of materials bago mag-Wednesday?'],
+  [12, 'Yes, I will submit the BOM by Wednesday.', 'Oo, ipapasa ko ang BOM sa Wednesday.'],
+  [16.5, 'We agreed to proceed with Supplier A for the fibre.', 'Napagkasunduan natin na ituloy sa Supplier A para sa fibre.'],
+  [22, 'Installation manpower goes from six to eight technicians so we finish before Friday.', 'Gagawin nating walo ang technicians mula anim para matapos bago mag-Friday.'],
+  [29, 'Engineering will complete the T3 site survey by the tenth.', 'Tatapusin ng Engineering ang T3 site survey bago mag-tenth.'],
+  [34.5, 'The client still has to approve the revised layout, which is a risk to the schedule.', 'Kailangan pang i-approve ng client ang revised layout, risk ito sa schedule.'],
+  [41, 'Let us meet again next Monday to check progress.', 'Magkita ulit tayo sa Monday para i-check ang progress.'],
 ];
 
 export async function transcribe() {
   needFeature('meeting', 'Meeting');
   await sleep(1500);
-  const segments = DEMO_LINES.map(([t, text]) => ({ t, text }));
-  return { text: segments.map((x) => x.text).join(' '), segments };
+  const segments = DEMO_LINES.map(([t, text, orig]) => ({ t, text, orig }));
+  return { text: segments.map((x) => x.text).join(' '), segments, language: 'Tagalog' };
 }
 export async function summarise({ contact, today, notes, transcript }) {
   needFeature('meeting', 'Meeting');

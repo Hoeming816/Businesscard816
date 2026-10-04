@@ -480,7 +480,9 @@ export async function downloadRecording(path) {
   return data;
 }
 
-/** Server-side transcription: { text, segments: [{ t: seconds, text }] }. Throws with code 'not_configured' if it is off. */
+/**
+ * Server-side transcription, in English: { text, segments: [{ t: seconds, text, orig? }], language }.
+ * A line spoken in another language keeps what was said in orig. Throws with code 'not_configured' if it is off. */
 export async function transcribe(blob, language, ext) {
   const form = new FormData();
   form.append('action', 'transcribe');
@@ -488,7 +490,7 @@ export async function transcribe(blob, language, ext) {
   form.append('audio', blob, `rec.${ext}`);
   try {
     const data = await invoke('meeting-notes', form);
-    return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [] };
+    return { text: data.transcript || '', segments: Array.isArray(data.segments) ? data.segments : [], language: data.language || '' };
   } catch (e) {
     if (/not configured|not set up|openai_api_key|not enabled/i.test(e.message)) e.code = 'not_configured';
     throw e;
