@@ -15,11 +15,13 @@ import Me from './components/Me.jsx';
 import IncomingShare from './components/IncomingShare.jsx';
 import IncomingInvite from './components/IncomingInvite.jsx';
 import Notifications from './components/Notifications.jsx';
-import TaskReminders from './components/TaskReminders.jsx';
+import TaskReminders, { useReminderBoard } from './components/TaskReminders.jsx';
 import { useCurrentBack } from './back.js';
 
 const WS_KEY = 'cardfile.workspace';
 const SIGN_REFRESH_MS = 50 * 60 * 1000; // signed URLs live 1 h; refresh after 50 min
+
+const NO_TASKS = [];
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = checking, null = signed out
@@ -281,13 +283,16 @@ export default function App() {
     }
   }, []);
 
+  // To Do reminders that have gone off: shown on the home page and in the bell.
+  const reminders = useReminderBoard(todoOn && tasksState === 'ready' ? tasks : NO_TASKS);
+
   const ctx = useMemo(() => ({
     api, uid: user?.id, profile, setProfile, workspace, workspaces, role, members, reloadMembers,
     contacts, contactsState, contactsError, reloadContacts, upsertContact, removeContact,
     memberName, toast, view, setView, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion,
     quickShot, clearQuickShot, can: (key) => featureOn(profile, key),
-    tasks, tasksState, tasksError, reloadTasks, upsertTask, removeTask,
-  }), [tasks, tasksState, tasksError, reloadTasks, upsertTask, removeTask, quickShot, clearQuickShot, user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
+    tasks, tasksState, tasksError, reloadTasks, upsertTask, removeTask, reminders,
+  }), [reminders, tasks, tasksState, tasksError, reloadTasks, upsertTask, removeTask, quickShot, clearQuickShot, user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
     reloadContacts, upsertContact, removeContact, memberName, toast, view, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion]);
 
   // ----- render -----
@@ -323,7 +328,7 @@ export default function App() {
   const invite = chosen ? (chosen.kind === 'invite' ? invites.find((i) => i.workspace_id === chosen.id) : null) : waitingInvites[0];
   const offer = chosen ? (chosen.kind === 'share' ? incoming.find((s) => s.id === chosen.id) : null) : (invite ? null : waiting[0]);
   const unseenReplies = replies.filter((r) => r.responded_at && r.responded_at > seenAt).length;
-  const bellCount = invites.length + incoming.length + unseenReplies;
+  const bellCount = invites.length + incoming.length + unseenReplies + reminders.active.length;
   const openNotifications = () => {
     setNotifOpen(true);
     const at = new Date().toISOString();
@@ -440,6 +445,7 @@ export default function App() {
           invites={invites}
           shares={incoming}
           replies={replies}
+          reminders={reminders}
           seenAt={seenAt}
           onClose={closeNotifications}
           onOpen={(item) => { closeNotifications(); setChosen(item); }}

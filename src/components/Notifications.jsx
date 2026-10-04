@@ -1,7 +1,8 @@
 import { Icon, Modal, formatDate } from './ui.jsx';
+import { ReminderList } from './TaskReminders.jsx';
 
-/** Everything waiting for me (invitations, shared cards) plus answers to cards I shared. */
-export default function Notifications({ invites, shares, replies, seenAt, onOpen, onClose }) {
+/** Everything waiting for me (to-do reminders, invitations, shared cards) plus answers to cards I shared. */
+export default function Notifications({ invites, shares, replies, reminders, seenAt, onOpen, onClose }) {
   const waiting = invites.length + shares.length;
   return (
     <Modal labelledBy="notif-title" onClose={onClose} className="notifications">
@@ -14,6 +15,12 @@ export default function Notifications({ invites, shares, replies, seenAt, onOpen
           <Icon name="x" size={20} />
         </button>
       </div>
+      {reminders?.active.length > 0 && (
+        <>
+          <h3 className="notif-head">Reminders</h3>
+          <ReminderList board={reminders} showLater={false} />
+        </>
+      )}
       <h3 className="notif-head">Waiting for you</h3>
       {waiting ? (
         <ul className="notif-list">
