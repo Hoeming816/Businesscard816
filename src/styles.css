@@ -1147,15 +1147,14 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .view-switch { margin-top: 8px; }
 
 /* Face photo on a business card contact */
-.thumb { position: relative; overflow: visible; }
-.thumb > img:not(.thumb-face) { border-radius: 6px; }
-.thumb .thumb-face {
-  /* Beats .thumb img (100% x 100%): the face is a round picture laid over the middle of the card. */
-  position: absolute; inset: 0; margin: auto; width: 62px; height: 62px; aspect-ratio: 1; border-radius: 50%;
-  object-fit: cover; border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(16, 24, 40, .25); background: var(--surface-3);
+.thumb-col { display: grid; gap: 6px; justify-items: center; }
+.thumb-face {
+  /* Face on top, card below: a round picture above the card thumbnail, never overlapping it. */
+  display: block; width: 56px; height: 56px; aspect-ratio: 1; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(16, 24, 40, .25); background: var(--surface-3);
 }
 @media (max-width: 720px) {
-  .thumb .thumb-face { width: 50px; height: 50px; }
+  .thumb-face { width: 48px; height: 48px; }
 }
 .face-row { display: flex; align-items: center; gap: 14px; }
 .face-avatar {
