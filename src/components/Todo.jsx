@@ -6,7 +6,7 @@ import { MINUTES_LANGUAGES } from '../minutes.js';
 import { canRecord, extFor, pickMime } from './Recorder.jsx';
 import TaskEditor from './TaskEditor.jsx';
 import TaskCalendar from './TaskCalendar.jsx';
-import TaskRow from './TaskRow.jsx';
+import TaskRow, { SelectTasks } from './TaskRow.jsx';
 import { canNotify } from './TaskReminders.jsx';
 import { Icon, Spinner, EmptyState } from './ui.jsx';
 
@@ -36,11 +36,27 @@ const NEEDS_AI = /[㐀-鿿]|\b(bukas|mamaya|ngayon|mamayang|alas|lunes|martes|mi
 
 /** The To Do List: one add box (type or speak), Today, All tasks and Calendar. */
 export default function Todo() {
-  const { tasks, tasksState, tasksError, reloadTasks } = useApp();
+  const { api, uid, toast, tasks, tasksState, tasksError, reloadTasks, removeTask } = useApp();
   const [view, setViewRaw] = useState(() => { try { return sessionStorage.getItem(VIEW_KEY) || 'today'; } catch { return 'today'; } });
   const setView = (v) => { setViewRaw(v); try { sessionStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
   const [editing, setEditing] = useState(null); // a task, or { new: true, ...fields }
   const [flash, setFlash] = useState(null); // id of the task just added
+  const [selected, setSelected] = useState(null); // a Set of task ids while choosing tasks to delete
+  const selecting = !!selected;
+  const [askDelete, setAskDelete] = useState(''); // '' | 'ask' | 'busy'
+  const canSelect = view !== 'calendar' && tasks.some((t) => t.created_by === uid);
+  const toggleSelect = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const stopSelecting = () => { setSelected(null); setAskDelete(''); };
+  const deleteSelected = async () => {
+    setAskDelete('busy');
+    const ids = [...selected];
+    const results = await Promise.allSettled(ids.map((id) => api.deleteTask(id)));
+    let gone = 0;
+    results.forEach((r, i) => { if (r.status === 'fulfilled') { removeTask(ids[i]); gone += 1; } });
+    const failed = ids.length - gone;
+    toast(failed ? `${gone} deleted; ${failed} could not be deleted.` : `${gone} ${gone === 1 ? 'task' : 'tasks'} deleted.`, failed ? 'error' : 'ok');
+    stopSelecting();
+  };
 
   useEffect(() => { if (tasksState === 'idle') reloadTasks(); }, [tasksState, reloadTasks]);
   const openCount = tasks.filter((t) => !isDone(t)).length;
@@ -55,17 +71,51 @@ export default function Todo() {
 
       <QuickAdd onAdded={(t) => { setFlash(t.id); setTimeout(() => setFlash(null), 2500); }} onMore={(fields) => setEditing({ new: true, ...fields })} />
 
-      <div className="chips view-switch todo-views" role="group" aria-label="View">
-        {VIEWS.map((v) => (
-          <button key={v.value} type="button" className={`chip ${view === v.value ? 'is-on' : ''}`} aria-pressed={view === v.value} onClick={() => setView(v.value)}>{v.label}</button>
-        ))}
+      <div className="todo-views-row">
+        <div className="chips view-switch todo-views" role="group" aria-label="View">
+          {VIEWS.map((v) => (
+            <button key={v.value} type="button" className={`chip ${view === v.value ? 'is-on' : ''}`} aria-pressed={view === v.value}
+              onClick={() => { setView(v.value); stopSelecting(); }}>{v.label}</button>
+          ))}
+        </div>
+        {canSelect && !selecting && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+            <Icon name="check" size={15} /> Select
+          </button>
+        )}
       </div>
+
+      {selecting && (
+        <div className="select-bar" role="region" aria-label="Delete several tasks">
+          {askDelete ? (
+            <>
+              <span className="select-bar-count">Delete {selected.size} {selected.size === 1 ? 'task' : 'tasks'}?</span>
+              <button type="button" className="btn btn-danger btn-sm" autoFocus disabled={askDelete === 'busy'} onClick={deleteSelected}>
+                {askDelete === 'busy' ? 'Deleting…' : 'Delete'}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={askDelete === 'busy'} onClick={() => setAskDelete('')}>Back</button>
+            </>
+          ) : (
+            <>
+              <span className="select-bar-count">{selected.size ? `${selected.size} selected` : 'Tap your tasks to select them'}</span>
+              {selected.size > 0 && (
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => setAskDelete('ask')}>
+                  <Icon name="trash" size={15} /> Delete ({selected.size})
+                </button>
+              )}
+              <button type="button" className="btn btn-ghost btn-sm" onClick={stopSelecting}>Cancel</button>
+            </>
+          )}
+        </div>
+      )}
 
       {tasksState === 'loading' && !tasks.length && <div className="loading-block"><Spinner /> Loading your tasks…</div>}
       {tasksState === 'error' && <p className="notice notice-error" role="alert">{tasksError}</p>}
 
-      {view === 'today' && <TodayView flash={flash} onOpen={setEditing} />}
-      {view === 'all' && <AllView flash={flash} onOpen={setEditing} />}
+      <SelectTasks.Provider value={selecting ? { selected, toggle: toggleSelect } : null}>
+        {view === 'today' && <TodayView flash={flash} onOpen={setEditing} />}
+        {view === 'all' && <AllView flash={flash} onOpen={setEditing} />}
+      </SelectTasks.Provider>
       {view === 'calendar' && <TaskCalendar onOpen={setEditing} onAdd={(due_on) => setEditing({ new: true, due_on })} />}
 
       {editing && <TaskEditor task={editing} onClose={() => setEditing(null)} />}
