@@ -551,7 +551,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .group:not(.group-plain) .rows { border-top-left-radius: 4px; background: linear-gradient(var(--tab), var(--surface) 10px); }
 .rows > li + li { border-top: 1px solid var(--line); }
 .row {
-  width: 100%; display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(0, 240px) 20px; gap: 16px; align-items: center;
+  width: 100%; display: grid; grid-template-columns: 166px minmax(0, 1fr) minmax(0, 240px) 20px; gap: 16px; align-items: center;
   padding: 12px 14px; border: 0; background: transparent; text-align: left; cursor: pointer; color: inherit;
 }
 .row:hover { background: var(--surface-2); }
@@ -1147,13 +1147,16 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .view-switch { margin-top: 8px; }
 
 /* Face photo on a business card contact */
-.thumb-col { display: grid; gap: 6px; justify-items: center; }
+/* Face and card side by side, cards lined up on the right of the column (stacked on phones,
+   where the row is narrow). Neither covers the other. */
+.thumb-col { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.thumb-col .thumb { flex: none; }
 .thumb-face {
-  /* Face on top, card below: a round picture above the card thumbnail, never overlapping it. */
-  display: block; width: 56px; height: 56px; aspect-ratio: 1; border-radius: 50%; object-fit: cover;
+  display: block; flex: none; width: 60px; height: 60px; aspect-ratio: 1; border-radius: 50%; object-fit: cover;
   border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(16, 24, 40, .25); background: var(--surface-3);
 }
 @media (max-width: 720px) {
+  .thumb-col { flex-direction: column; gap: 6px; }
   .thumb-face { width: 48px; height: 48px; }
 }
 .face-row { display: flex; align-items: center; gap: 14px; }
