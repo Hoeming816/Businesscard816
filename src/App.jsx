@@ -374,9 +374,10 @@ function TabbarItem({ icon, label, active, onClick }) {
 }
 
 function WorkspaceSwitcher() {
-  const { workspaces, workspace, switchWorkspace, uid } = useApp();
+  const { workspaces, workspace, switchWorkspace, uid, profile } = useApp();
   if (!workspaces || !workspaces.length) return <span className="ws-switch ws-empty">No workspace</span>;
-  if (workspaces.length === 1) {
+  // Only the super admin gets the list; everyone else sees just "My cards" (teams can be switched on the Me page).
+  if (workspaces.length === 1 || !profile?.is_super_admin) {
     return (
       <span className="ws-switch ws-single">
         <Icon name="building" size={16} className="ws-icon" />
