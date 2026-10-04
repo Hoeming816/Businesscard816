@@ -908,6 +908,8 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   .tabbar-label { line-height: 1; }
 
   .toasts { left: 50%; right: auto; transform: translateX(-50%); bottom: calc(var(--tabbar-h) + var(--safe-b) + 12px); }
+  body.typing .tabbar { display: none; }
+  body.typing .toasts { bottom: calc(12px + var(--safe-b)); }
   body.modal-open .toasts { bottom: calc(12px + var(--safe-b)); }
 
   .toolbar { gap: 8px; }

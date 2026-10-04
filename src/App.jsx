@@ -54,6 +54,20 @@ export default function App() {
   const signedRef = useRef(new Map()); // `${bucket}:${path}` -> { url, at }
   const pendingRef = useRef(new Set());
 
+  // While typing on a phone, the on-screen keyboard shrinks the view and iOS
+  // Safari lets the fixed tab bar float up mid-page as you scroll. Hide it
+  // until the keyboard closes, so it only ever sits at the bottom.
+  useEffect(() => {
+    const typing = (el) => el?.matches?.('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file]):not([type=range])');
+    let t;
+    const onIn = (e) => { if (typing(e.target)) { clearTimeout(t); document.body.classList.add('typing'); } };
+    // Moving from one field to the next fires focusout then focusin; wait a beat.
+    const onOut = () => { clearTimeout(t); t = setTimeout(() => { if (!typing(document.activeElement)) document.body.classList.remove('typing'); }, 120); };
+    document.addEventListener('focusin', onIn);
+    document.addEventListener('focusout', onOut);
+    return () => { clearTimeout(t); document.removeEventListener('focusin', onIn); document.removeEventListener('focusout', onOut); document.body.classList.remove('typing'); };
+  }, []);
+
   // ----- toasts -----
   const toast = useCallback((message, tone = 'ok') => {
     const id = Math.random().toString(36).slice(2);
