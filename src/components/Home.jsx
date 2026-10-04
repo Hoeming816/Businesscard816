@@ -5,10 +5,12 @@ import Minutes from './Minutes.jsx';
 import { Icon } from './ui.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
+import notesIcon from '../assets/tab-quick-notes.png';
 
 const SECTIONS = [
   { value: 'cards', label: 'Business Cards', img: cardsIcon },
   { value: 'minutes', label: 'Meeting', img: meetingIcon },
+  { value: 'notes', label: 'Quick Notes', img: notesIcon },
 ];
 
 // Which section is open, kept for this browser tab so Scan, Team or a refresh
@@ -37,7 +39,7 @@ export default function Home() {
       <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>
         <Icon name="chevronLeft" size={16} /> Back
       </button>
-      {section === 'cards' ? <Contacts /> : <Minutes />}
+      {section === 'cards' ? <Contacts /> : section === 'minutes' ? <Minutes /> : <QuickNotes />}
     </div>
   );
 }
@@ -57,6 +59,17 @@ function HomePick({ onPick }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Quick Notes isn't built yet; its tile opens this placeholder. */
+function QuickNotes() {
+  return (
+    <div className="empty">
+      <img src={notesIcon} alt="" width="96" height="96" />
+      <h3>Quick Notes</h3>
+      <p>Coming soon.</p>
     </div>
   );
 }
