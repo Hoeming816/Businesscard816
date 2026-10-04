@@ -89,6 +89,13 @@ export function formatDay(iso, today) {
   return `${d} ${MONTH_SHORT[m - 1]}${String(y) !== today.slice(0, 4) ? ` ${y}` : ''}`;
 }
 
+/** "Fri 2 Oct" (with the year when it isn't this year). */
+export function formatLongDay(iso, today) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${WEEKDAY_SHORT[isoDay(iso)]} ${d} ${MONTH_SHORT[m - 1]}${String(y) !== String(today).slice(0, 4) ? ` ${y}` : ''}`;
+}
+
 export function dueLabel(task, today) {
   if (!task.due_on) return '';
   const day = formatDay(task.due_on, today);
@@ -281,19 +288,35 @@ export function compareTasks(a, b) {
   return String(a.created_at || '').localeCompare(String(b.created_at || ''));
 }
 
-/** My Day: what is late, what is due today or was added to today, and what was finished today. */
+/**
+ * The earlier day an unfinished task is carried over from: its missed due date,
+ * or the day it was put in My Day. Null when it isn't from an earlier day.
+ */
+export function carriedFrom(task, today) {
+  if (isDone(task)) return null;
+  const past = [task.due_on, task.my_day_on].filter((d) => d && d < today).sort();
+  if (!past.length || task.due_on === today) return null;
+  return past[0];
+}
+
+/**
+ * My Day: unfinished tasks carried over from earlier days (marked with the day
+ * they are from), what is due today or was added to today, and what was
+ * finished today.
+ */
 export function myDay(tasks, now = new Date()) {
   const today = toISODate(now);
   const open = tasks.filter((t) => !isDone(t));
-  const overdue = open.filter((t) => t.due_on && t.due_on < today).sort(compareTasks);
+  const earlier = open.filter((t) => carriedFrom(t, today))
+    .sort((a, b) => carriedFrom(a, today).localeCompare(carriedFrom(b, today)) || compareTasks(a, b));
   const todayList = open
-    .filter((t) => !(t.due_on && t.due_on < today) && (t.due_on === today || t.my_day_on === today))
+    .filter((t) => !earlier.includes(t) && (t.due_on === today || t.my_day_on === today))
     .sort(compareTasks);
   const done = tasks
     .filter((t) => (isDone(t) || t.done_count > 0) && t.completed_at && localDate(t.completed_at) === today
       && (isDone(t) || !todayList.includes(t)))
     .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
-  return { overdue, today: todayList, done };
+  return { overdue: earlier, today: todayList, done };
 }
 
 export const DUE_FILTERS = [

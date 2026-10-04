@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cleanTask, completion, dueLabel, dueReminders, filterTasks, firstDate, formatTime, groupTasks, isOverdue,
+  carriedFrom, cleanTask, completion, formatLongDay, dueLabel, dueReminders, filterTasks, firstDate, formatTime, groupTasks, isOverdue,
   myDay, nextDate, occurrences, parseQuickAdd, repeatLabel, rollForward, smartReminders,
 } from './todo.js';
 
@@ -158,17 +158,22 @@ describe('lists', () => {
     { id: 'e', title: 'Next week', due_on: '2026-10-09', priority: 'High', status: 'waiting', created_by: 'me', assignee_id: 'bob', assignee_name: 'Bob' },
     { id: 'f', title: 'Done today', due_on: TODAY, status: 'done', completed_at: new Date(2026, 9, 4, 8).toISOString(), created_by: 'me' },
     { id: 'g', title: 'From Ana', status: 'todo', created_by: 'ana', assignee_id: 'me', notes: 'quotation for Acme' },
+    { id: 'h', title: 'Picked yesterday', my_day_on: '2026-10-03', due_on: '2026-10-20', status: 'todo', created_by: 'me' },
   ];
   it('my day', () => {
     const d = myDay(tasks, NOW);
-    expect(d.overdue.map((t) => t.id)).toEqual(['a']);
+    expect(d.overdue.map((t) => t.id)).toEqual(['a', 'h']);
+    expect(carriedFrom(tasks[0], TODAY)).toBe('2026-10-01');
+    expect(carriedFrom(tasks[7], TODAY)).toBe('2026-10-03');
+    expect(carriedFrom(tasks[1], TODAY)).toBeNull();
+    expect(formatLongDay('2026-10-03', TODAY)).toBe('Sat 3 Oct');
     expect(d.today.map((t) => t.id)).toEqual(['b', 'c', 'd']);
     expect(d.done.map((t) => t.id)).toEqual(['f']);
   });
   it('filters', () => {
     const ids = (f) => filterTasks(tasks, f, 'me', NOW).map((t) => t.id);
-    expect(ids({})).toEqual(['a', 'b', 'c', 'd', 'e', 'g']);
-    expect(ids({ status: 'all' })).toHaveLength(7);
+    expect(ids({})).toEqual(['a', 'b', 'c', 'd', 'e', 'g', 'h']);
+    expect(ids({ status: 'all' })).toHaveLength(8);
     expect(ids({ status: 'done' })).toEqual(['f']);
     expect(ids({ priority: 'Urgent' })).toEqual(['c']);
     expect(ids({ due: 'overdue' })).toEqual(['a']);
@@ -183,7 +188,7 @@ describe('lists', () => {
   });
   it('groups', () => {
     expect(groupTasks(tasks, NOW).map((g) => [g.key, g.items.map((t) => t.id)])).toEqual([
-      ['overdue', ['a']], ['today', ['b', 'c']], ['week', ['e']], ['none', ['g', 'd']], ['done', ['f']],
+      ['overdue', ['a']], ['today', ['b', 'c']], ['week', ['e']], ['later', ['h']], ['none', ['g', 'd']], ['done', ['f']],
     ]);
   });
   it('cleans a task before saving', () => {
