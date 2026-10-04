@@ -51,6 +51,37 @@ export default function ContactForm({ draft, setDraft, contacts, readOnly = fals
     return text(k, def.label, { list: suggestions[k] });
   };
 
+  // Contact type with a one-tap "Prospect" mark beside it.
+  const isProspect = draft.contact_type === 'Prospect';
+  const contactTypeField = () => (
+    <div className="field">
+      <label htmlFor={`${uid}-contact_type`}>{CLASSIFICATION_FIELDS.contact_type.label}</label>
+      <div className="type-row">
+        <input
+          id={`${uid}-contact_type`}
+          value={draft.contact_type ?? ''}
+          onChange={set('contact_type')}
+          readOnly={readOnly}
+          list={`${uid}-dl-contact_type`}
+          autoComplete="off"
+        />
+        {!readOnly && (
+          <button
+            type="button"
+            className={`btn btn-sm ${isProspect ? 'btn-primary' : 'btn-outline'} prospect-toggle`}
+            aria-pressed={isProspect}
+            onClick={() => setDraft((d) => ({ ...d, contact_type: isProspect ? '' : 'Prospect' }))}
+          >
+            {isProspect && <Icon name="check" size={14} />} Prospect
+          </button>
+        )}
+      </div>
+      <datalist id={`${uid}-dl-contact_type`}>
+        {(suggestions.contact_type || []).map((v) => <option key={v} value={v} />)}
+      </datalist>
+    </div>
+  );
+
   return (
     <div className={`contact-form ${readOnly ? 'is-readonly' : ''}`}>
       {sections.includes('card') && (
@@ -149,7 +180,7 @@ export default function ContactForm({ draft, setDraft, contacts, readOnly = fals
         <fieldset className="form-section">
           <legend>Classification</legend>
           <div className="grid-2">
-            {classField('contact_type')}
+            {contactTypeField()}
             {classField('industry')}
             {classField('business_category')}
             {classField('job_function')}
