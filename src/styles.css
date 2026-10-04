@@ -1322,6 +1322,19 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 
 /* Editor */
 .task-editor { width: min(600px, 100%); }
+/* Notifications: Back and Close at the top, Back again at the bottom. */
+.notif-bar { display: flex; align-items: center; gap: 8px; margin: -6px -6px 8px; }
+.notif-bar .modal-title { flex: 1; margin: 0; }
+.notif-foot { display: flex; justify-content: center; padding-top: 16px; }
+.notif-foot .btn { width: 100%; justify-content: center; }
+@media (max-width: 720px) {
+  .modal.notifications { padding-top: calc(16px + var(--safe-t)); padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px); min-height: 100dvh; }
+  .notif-foot {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1;
+    padding: 8px calc(16px + var(--safe-r)) calc(8px + var(--safe-b)) calc(16px + var(--safe-l));
+    background: var(--surface); border-top: 1px solid var(--line);
+  }
+}
 .task-editor .modal-x { position: absolute; top: 14px; right: 14px; }
 .task-editor .modal-title { padding-right: 40px; }
 .segbar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; background: var(--surface-3); border-radius: 10px; }
