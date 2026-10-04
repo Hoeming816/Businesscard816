@@ -6,10 +6,11 @@ import { load, save } from './storage.js';
 export const MINUTES_PREFIX = 'Minutes: ';
 
 // The language minutes and transcripts are written in, whatever was spoken.
-// Kept per device; English unless Chinese is picked.
+// Kept per device; English unless another is picked.
 export const MINUTES_LANGUAGES = [
   { value: 'English', label: 'English', short: 'English' },
   { value: 'Chinese', label: 'Chinese (中文)', short: '中文' },
+  { value: 'Tagalog', label: 'Tagalog', short: 'Tagalog' },
 ];
 const LANG_KEY = 'nomiqo.minutesLanguage';
 export const minutesLanguage = () => {

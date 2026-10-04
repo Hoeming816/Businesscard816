@@ -139,8 +139,9 @@ describe('follow-up tracking', () => {
 });
 
 describe('minutes language', () => {
-  it('keeps English or Chinese and defaults to English', () => {
+  it('keeps English, Chinese or Tagalog and defaults to English', () => {
     expect(normaliseMinutes({ language: 'Chinese' }).language).toBe('Chinese');
+    expect(normaliseMinutes({ language: 'Tagalog' }).language).toBe('Tagalog');
     expect(normaliseMinutes({ language: 'Klingon' }).language).toBe('English');
     expect(normaliseMinutes().language).toBe('English');
   });
