@@ -1178,3 +1178,8 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .face-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, .45); pointer-events: none; outline: 2px solid rgba(255, 255, 255, .85); }
 .face-zoom { display: flex; align-items: center; gap: 10px; width: min(100%, 360px); margin: 0 auto 8px; }
 .face-zoom input { flex: 1; }
+
+/* Contact type with a one-tap "Prospect" mark */
+.type-row { display: flex; gap: 8px; align-items: center; }
+.type-row input { flex: 1; min-width: 0; }
+.prospect-toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; }
