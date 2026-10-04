@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { useApp } from '../context.js';
 import { carriedFrom, completion, dueLabel, formatLongDay, isDone, isOverdue, priorityTone, repeatLabel, subtaskProgress } from '../todo.js';
 import { Icon } from './ui.jsx';
 
-/** One task: what, when, and the done checkbox at the end. */
+/** While choosing several tasks to delete: { selected: Set of ids, toggle(id) }; otherwise null. */
+export const SelectTasks = createContext(null);
+
+/** One task: what, when, a delete button (your own tasks) and the done checkbox at the end. */
 export default function TaskRow({ task, today, flash, onOpen }) {
-  const { api, uid, toast, upsertTask } = useApp();
+  const { api, uid, toast, upsertTask, removeTask } = useApp();
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false); // "Delete this task?" showing
   const done = isDone(task);
   const from = carriedFrom(task, today);
   const late = isOverdue(task);
@@ -14,6 +18,7 @@ export default function TaskRow({ task, today, flash, onOpen }) {
   // A task carried over from an earlier day says so; its old date isn't repeated.
   const due = from && task.due_on && task.due_on < today ? '' : dueLabel(task, today);
   const mine = task.created_by === uid;
+  const select = useContext(SelectTasks);
 
   const toggle = async () => {
     setBusy(true);
@@ -28,6 +33,46 @@ export default function TaskRow({ task, today, flash, onOpen }) {
       setBusy(false);
     }
   };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.deleteTask(task.id);
+      removeTask(task.id);
+      toast('Task deleted.');
+    } catch (e) {
+      toast(e.message, 'error');
+      setBusy(false);
+    }
+  };
+
+  if (asking) {
+    return (
+      <li className="task-row task-row-confirm" role="group" aria-label="Delete task">
+        <span className="task-confirm-msg">Delete <b>{task.title}</b>?</span>
+        <button type="button" className="btn btn-danger btn-sm" autoFocus disabled={busy} onClick={remove}>{busy ? 'Deleting…' : 'Delete'}</button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setAsking(false)}>Cancel</button>
+      </li>
+    );
+  }
+
+  if (select) {
+    // Choosing tasks to delete: tap a row to tick it. Tasks given to you can't be deleted.
+    const on = select.selected.has(task.id);
+    return (
+      <li className={`task-row is-selecting ${on ? 'is-selected' : ''} ${mine ? '' : 'is-locked'} prio-${task.priority.toLowerCase()}`}>
+        <label className="task-pick">
+          <input type="checkbox" checked={on} disabled={!mine} onChange={() => select.toggle(task.id)}
+            aria-label={mine ? `Select: ${task.title}` : `${task.title} (given to you, can't be deleted)`} />
+          <span className="task-check-box" aria-hidden="true"><Icon name="check" size={16} strokeWidth={2.6} /></span>
+          <span className="task-main">
+            <span className="task-title">{task.title}</span>
+            {!mine && <span className="task-meta small"><span><Icon name="user" size={12} /> From {task.assigned_by_name}</span></span>}
+          </span>
+        </label>
+      </li>
+    );
+  }
 
   return (
     <li className={`task-row ${done ? 'is-done' : ''} ${flash ? 'is-new' : ''} prio-${task.priority.toLowerCase()}`}>
@@ -45,6 +90,11 @@ export default function TaskRow({ task, today, flash, onOpen }) {
           {!mine && <span><Icon name="user" size={12} /> From {task.assigned_by_name}</span>}
         </span>
       </button>
+      {mine && (
+        <button type="button" className="task-delete" onClick={() => setAsking(true)} disabled={busy} aria-label={`Delete: ${task.title}`} title="Delete task">
+          <Icon name="trash" size={17} />
+        </button>
+      )}
       <label className="task-check" title={done ? 'Mark as not done' : 'Mark as done'}>
         <input type="checkbox" checked={done} disabled={busy} onChange={toggle} aria-label={`${done ? 'Not done' : 'Done'}: ${task.title}`} />
         <span className="task-check-box" aria-hidden="true"><Icon name="check" size={16} strokeWidth={2.6} /></span>

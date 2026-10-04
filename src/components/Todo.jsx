@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { toISODate } from '../filters.js';
 import { cleanTask, dueLabel, filterTasks, groupTasks, isDone, myDay, nowHHMM, parseQuickAdd, repeatLabel } from '../todo.js';
+import { MINUTES_LANGUAGES } from '../minutes.js';
 import { canRecord, extFor, pickMime } from './Recorder.jsx';
 import TaskEditor from './TaskEditor.jsx';
 import TaskCalendar from './TaskCalendar.jsx';
-import TaskRow from './TaskRow.jsx';
+import TaskRow, { SelectTasks } from './TaskRow.jsx';
 import { canNotify } from './TaskReminders.jsx';
 import { Icon, Spinner, EmptyState } from './ui.jsx';
 
@@ -26,15 +27,36 @@ const MAX_VOICE_SEC = 30;
 
 const clockNow = () => { const n = new Date(); return { today: toISODate(n), time: nowHHMM(n) }; };
 // Chinese text, or Tagalog words the quick parser doesn't know, go to the AI reader.
+// The language spoken tasks are written in: English unless another is picked, kept on this device.
+const VOICE_LANG_KEY = 'nomiqo.voiceLanguage';
+const readVoiceLang = () => {
+  try { const v = localStorage.getItem(VOICE_LANG_KEY); return MINUTES_LANGUAGES.some((l) => l.value === v) ? v : 'English'; } catch { return 'English'; }
+};
 const NEEDS_AI = /[㐀-鿿]|\b(bukas|mamaya|ngayon|mamayang|alas|lunes|martes|miyerkules|huwebes|biyernes|sabado|linggo|tuwing|araw-araw|paalala|tawagan|kailangan|sa susunod)\b/i;
 
 /** The To Do List: one add box (type or speak), Today, All tasks and Calendar. */
 export default function Todo() {
-  const { tasks, tasksState, tasksError, reloadTasks } = useApp();
+  const { api, uid, toast, tasks, tasksState, tasksError, reloadTasks, removeTask } = useApp();
   const [view, setViewRaw] = useState(() => { try { return sessionStorage.getItem(VIEW_KEY) || 'today'; } catch { return 'today'; } });
   const setView = (v) => { setViewRaw(v); try { sessionStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
   const [editing, setEditing] = useState(null); // a task, or { new: true, ...fields }
   const [flash, setFlash] = useState(null); // id of the task just added
+  const [selected, setSelected] = useState(null); // a Set of task ids while choosing tasks to delete
+  const selecting = !!selected;
+  const [askDelete, setAskDelete] = useState(''); // '' | 'ask' | 'busy'
+  const canSelect = view !== 'calendar' && tasks.some((t) => t.created_by === uid);
+  const toggleSelect = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const stopSelecting = () => { setSelected(null); setAskDelete(''); };
+  const deleteSelected = async () => {
+    setAskDelete('busy');
+    const ids = [...selected];
+    const results = await Promise.allSettled(ids.map((id) => api.deleteTask(id)));
+    let gone = 0;
+    results.forEach((r, i) => { if (r.status === 'fulfilled') { removeTask(ids[i]); gone += 1; } });
+    const failed = ids.length - gone;
+    toast(failed ? `${gone} deleted; ${failed} could not be deleted.` : `${gone} ${gone === 1 ? 'task' : 'tasks'} deleted.`, failed ? 'error' : 'ok');
+    stopSelecting();
+  };
 
   useEffect(() => { if (tasksState === 'idle') reloadTasks(); }, [tasksState, reloadTasks]);
   const openCount = tasks.filter((t) => !isDone(t)).length;
@@ -49,17 +71,51 @@ export default function Todo() {
 
       <QuickAdd onAdded={(t) => { setFlash(t.id); setTimeout(() => setFlash(null), 2500); }} onMore={(fields) => setEditing({ new: true, ...fields })} />
 
-      <div className="chips view-switch todo-views" role="group" aria-label="View">
-        {VIEWS.map((v) => (
-          <button key={v.value} type="button" className={`chip ${view === v.value ? 'is-on' : ''}`} aria-pressed={view === v.value} onClick={() => setView(v.value)}>{v.label}</button>
-        ))}
+      <div className="todo-views-row">
+        <div className="chips view-switch todo-views" role="group" aria-label="View">
+          {VIEWS.map((v) => (
+            <button key={v.value} type="button" className={`chip ${view === v.value ? 'is-on' : ''}`} aria-pressed={view === v.value}
+              onClick={() => { setView(v.value); stopSelecting(); }}>{v.label}</button>
+          ))}
+        </div>
+        {canSelect && !selecting && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+            <Icon name="check" size={15} /> Select
+          </button>
+        )}
       </div>
+
+      {selecting && (
+        <div className="select-bar" role="region" aria-label="Delete several tasks">
+          {askDelete ? (
+            <>
+              <span className="select-bar-count">Delete {selected.size} {selected.size === 1 ? 'task' : 'tasks'}?</span>
+              <button type="button" className="btn btn-danger btn-sm" autoFocus disabled={askDelete === 'busy'} onClick={deleteSelected}>
+                {askDelete === 'busy' ? 'Deleting…' : 'Delete'}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={askDelete === 'busy'} onClick={() => setAskDelete('')}>Back</button>
+            </>
+          ) : (
+            <>
+              <span className="select-bar-count">{selected.size ? `${selected.size} selected` : 'Tap your tasks to select them'}</span>
+              {selected.size > 0 && (
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => setAskDelete('ask')}>
+                  <Icon name="trash" size={15} /> Delete ({selected.size})
+                </button>
+              )}
+              <button type="button" className="btn btn-ghost btn-sm" onClick={stopSelecting}>Cancel</button>
+            </>
+          )}
+        </div>
+      )}
 
       {tasksState === 'loading' && !tasks.length && <div className="loading-block"><Spinner /> Loading your tasks…</div>}
       {tasksState === 'error' && <p className="notice notice-error" role="alert">{tasksError}</p>}
 
-      {view === 'today' && <TodayView flash={flash} onOpen={setEditing} />}
-      {view === 'all' && <AllView flash={flash} onOpen={setEditing} />}
+      <SelectTasks.Provider value={selecting ? { selected, toggle: toggleSelect } : null}>
+        {view === 'today' && <TodayView flash={flash} onOpen={setEditing} />}
+        {view === 'all' && <AllView flash={flash} onOpen={setEditing} />}
+      </SelectTasks.Provider>
       {view === 'calendar' && <TaskCalendar onOpen={setEditing} onAdd={(due_on) => setEditing({ new: true, due_on })} />}
 
       {editing && <TaskEditor task={editing} onClose={() => setEditing(null)} />}
@@ -88,6 +144,8 @@ function QuickAdd({ onAdded, onMore }) {
   const { api, toast, upsertTask } = useApp();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState('');
+  const [lang, setLangRaw] = useState(readVoiceLang);
+  const setLang = (v) => { setLangRaw(v); try { localStorage.setItem(VOICE_LANG_KEY, v); } catch { /* private mode */ } };
   const input = useRef(null);
   const preview = useMemo(() => (text.trim() && !NEEDS_AI.test(text) ? parseQuickAdd(text) : null), [text]);
   const today = toISODate(new Date());
@@ -139,7 +197,7 @@ function QuickAdd({ onAdded, onMore }) {
           disabled={!!busy && busy !== 'add'}
           maxLength={500}
         />
-        <VoiceButton disabled={!!busy} onBusy={setBusy} onHeard={async ({ text: heard, task }) => {
+        <VoiceButton language={lang} disabled={!!busy} onBusy={setBusy} onHeard={async ({ text: heard, task }) => {
           try { await save(task, heard); } catch (err) { toast(err.message, 'error'); }
         }} />
         <button type="submit" className="btn btn-primary" disabled={!text.trim() || !!busy} aria-label="Add task">
@@ -154,13 +212,24 @@ function QuickAdd({ onAdded, onMore }) {
           <button type="button" className="link" onClick={() => { onMore(preview); setText(''); }}>More options</button>
         </p>
       )}
+      {canRecord && (
+        <label className="quick-add-lang small muted">
+          <Icon name="mic" size={13} /> Voice tasks in
+          <select value={lang} onChange={(e) => setLang(e.target.value)} disabled={!!busy}>
+            {MINUTES_LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+        </label>
+      )}
       {busy === 'voice' && <p className="quick-add-hint small" role="status"><Spinner /> Working out your task…</p>}
     </form>
   );
 }
 
-/** Tap to speak, tap again to stop. The recording is turned into a task by AI, in English, Mandarin or Tagalog. */
-function VoiceButton({ onHeard, onBusy, disabled }) {
+/**
+ * Tap to speak, tap again to stop. The recording is turned into a task by AI, written in
+ * `language` (English by default); Mandarin or Tagalog speech is translated into it.
+ */
+function VoiceButton({ language, onHeard, onBusy, disabled }) {
   const { api, toast } = useApp();
   const [on, setOn] = useState(false);
   const [secs, setSecs] = useState(0);
@@ -195,7 +264,7 @@ function VoiceButton({ onHeard, onBusy, disabled }) {
         if (!blob.size || Date.now() - startedAt < 600) { toast('Nothing was heard. Tap the mic and speak, then tap it again.', 'error'); return; }
         onBusy('voice');
         try {
-          onHeard(await api.voiceTask(blob, extFor(type), clockNow()));
+          onHeard(await api.voiceTask(blob, extFor(type), clockNow(), language));
         } catch (e) {
           toast(e.message, 'error');
         } finally {
@@ -223,7 +292,7 @@ function VoiceButton({ onHeard, onBusy, disabled }) {
       onClick={on ? stop : start}
       disabled={disabled && !on}
       aria-label={on ? 'Stop and add the task' : 'Say a task'}
-      title={on ? 'Tap to stop' : 'Say a task (English, 中文 or Tagalog)'}
+      title={on ? 'Tap to stop' : 'Say a task'}
     >
       <Icon name={on ? 'stop' : 'mic'} size={18} />
       {on && <span className="mono small">{secs}s</span>}

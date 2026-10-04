@@ -1250,6 +1250,8 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .voice-btn { padding: 0 14px; gap: 5px; }
 .quick-add-hint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--accent-soft-ink); padding-left: 4px; }
 .quick-add-hint .link { font-size: 13px; margin-left: 6px; }
+.quick-add-lang { display: flex; align-items: center; gap: 6px; padding-left: 4px; }
+.quick-add-lang select { width: auto; min-height: 0; padding: 2px 24px 2px 8px; font-size: 13px; }
 
 .task-group { display: grid; gap: 8px; }
 .task-group-h { font: 650 13px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); display: flex; align-items: center; gap: 8px; }
@@ -1276,6 +1278,27 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .task-prio { padding: 0 7px; border-radius: 999px; font-weight: 600; font-size: 11.5px; }
 .task-row.is-done .task-title { text-decoration: line-through; color: var(--ink-3); font-weight: 500; }
 .task-row.is-done { box-shadow: none; background: var(--surface-2); }
+
+.task-delete { flex: none; display: grid; place-items: center; width: 36px; align-self: stretch; background: none; border: 0; color: var(--ink-3); cursor: pointer; border-radius: 8px; }
+.task-delete:hover, .task-delete:focus-visible { color: var(--danger); }
+.task-row-confirm { gap: 8px; padding: 10px 12px; border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--surface)); }
+.task-confirm-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.todo-views-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.select-bar {
+  position: sticky; top: 8px; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--shadow-sm);
+}
+.select-bar-count { flex: 1; min-width: 0; font-weight: 600; }
+.task-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; padding-left: 10px; cursor: pointer; position: relative; }
+.task-pick input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.task-pick .task-check-box { flex: none; border-radius: 7px; }
+.task-pick input:checked ~ .task-check-box { background: var(--danger); border-color: var(--danger); color: #fff; }
+.task-pick input:focus-visible ~ .task-check-box { outline: 2px solid var(--focus); outline-offset: 2px; }
+.task-row.is-selected { background: color-mix(in srgb, var(--danger) 6%, var(--surface)); }
+.task-row.is-locked { opacity: .55; }
+.task-row.is-locked .task-pick, .task-row.is-locked .task-pick input { cursor: not-allowed; }
+.task-row.is-locked .task-check-box { visibility: hidden; }
 
 /* The done checkbox, at the end of the row, big enough for a thumb. */
 .task-check { flex: none; display: grid; place-items: center; width: 52px; align-self: stretch; cursor: pointer; position: relative; }

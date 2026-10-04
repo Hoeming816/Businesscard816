@@ -663,7 +663,7 @@ export async function aiTask(text, clock) {
   const { found: _found, ...task } = parseQuickAdd(text, demoClock(clock));
   return { ...task, notes: '', subtasks: [] };
 }
-export async function voiceTask(_blob, _ext, clock) {
+export async function voiceTask(_blob, _ext, clock, _language) {
   needFeature('todo', 'To Do List');
   await sleep(1200);
   const text = 'Remind me to send the quotation to Acme on Friday at 3pm, high priority';
