@@ -13,6 +13,8 @@ import Team from './components/Team.jsx';
 import SuperAdmin from './components/SuperAdmin.jsx';
 import Me from './components/Me.jsx';
 import IncomingShare from './components/IncomingShare.jsx';
+import IncomingInvite from './components/IncomingInvite.jsx';
+import Notifications from './components/Notifications.jsx';
 
 const WS_KEY = 'cardfile.workspace';
 const SIGN_REFRESH_MS = 50 * 60 * 1000; // signed URLs live 1 h; refresh after 50 min
@@ -35,6 +37,18 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   // Cards other members are offering; the first one not put off is shown as a prompt.
   const [incoming, setIncoming] = useState([]);
+  // Teams that invited me; answered before any card offers.
+  const [invites, setInvites] = useState([]);
+  // Answers to cards I shared, for the notifications list.
+  const [replies, setReplies] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  // An item picked from the notifications list to answer now.
+  const [chosen, setChosen] = useState(null);
+  const seenKey = user ? `nomiqo.notifSeen.${user.id}` : '';
+  const [seenAt, setSeenAt] = useState('');
+  useEffect(() => {
+    try { setSeenAt((seenKey && localStorage.getItem(seenKey)) || ''); } catch { setSeenAt(''); }
+  }, [seenKey]);
   const [later, setLater] = useState(() => new Set());
   const [signedVersion, setSignedVersion] = useState(0);
   const signedRef = useRef(new Map()); // `${bucket}:${path}` -> { url, at }
@@ -142,11 +156,13 @@ export default function App() {
 
   const loadIncoming = useCallback(async () => {
     if (!user) return;
+    try { setInvites(await api.listMyInvites()); } catch { /* the prompt is best-effort */ }
     try { setIncoming(await api.listIncomingShares(user.id)); } catch { /* the prompt is best-effort */ }
+    try { setReplies(await api.listShareReplies(user.id)); } catch { /* best-effort */ }
   }, [user]);
   useEffect(() => {
     if (profile) loadIncoming();
-    else setIncoming([]);
+    else { setIncoming([]); setInvites([]); setReplies([]); }
   }, [profile?.id, loadIncoming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh: reload the page when a newer build is live (so installed home-screen
@@ -253,8 +269,21 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
+  const waitingInvites = invites.filter((i) => !later.has(`invite:${i.workspace_id}`));
   const waiting = incoming.filter((s) => !later.has(s.id));
-  const offer = waiting[0];
+  const invite = chosen ? (chosen.kind === 'invite' ? invites.find((i) => i.workspace_id === chosen.id) : null) : waitingInvites[0];
+  const offer = chosen ? (chosen.kind === 'share' ? incoming.find((s) => s.id === chosen.id) : null) : (invite ? null : waiting[0]);
+  const unseenReplies = replies.filter((r) => r.responded_at && r.responded_at > seenAt).length;
+  const bellCount = invites.length + incoming.length + unseenReplies;
+  const openNotifications = () => {
+    setNotifOpen(true);
+    const at = new Date().toISOString();
+    setSeenAt((prev) => { try { if (seenKey) localStorage.setItem(seenKey, at); } catch { /* per-device only */ } return prev; });
+  };
+  const closeNotifications = () => {
+    setNotifOpen(false);
+    try { setSeenAt((seenKey && localStorage.getItem(seenKey)) || seenAt); } catch { /* keep */ }
+  };
 
   let main;
   if (!workspace && view !== 'me' && !(view === 'admin' && isSuper)) {
@@ -288,6 +317,16 @@ export default function App() {
             ))}
           </nav>
           {api.isDemo && <span className="demo-badge" title="Sample data, nothing is saved">Demo</span>}
+          <button
+            type="button"
+            className="icon-btn bell-btn"
+            onClick={openNotifications}
+            aria-label={bellCount ? `Notifications, ${bellCount} new` : 'Notifications'}
+            title="Notifications"
+          >
+            <Icon name="bell" size={19} />
+            {bellCount > 0 && <span className="bell-count" aria-hidden="true">{bellCount > 9 ? '9+' : bellCount}</span>}
+          </button>
           <button
             type="button"
             className={`icon-btn refresh-btn ${refreshing ? 'is-busy' : ''}`}
@@ -329,7 +368,7 @@ export default function App() {
             <span className="tabbar-label">Scan</span>
           </button>
           {isSuper && <TabbarItem icon="shield" label="Admin" active={view === 'admin'} onClick={() => go('admin')} />}
-          <TabbarItem icon="user" label="Me" active={view === 'me'} onClick={() => go('me')} />
+          <TabbarItem icon="user" label="Account" active={view === 'me'} onClick={() => go('me')} />
           <input
             ref={quickCam}
             type="file"
@@ -346,14 +385,38 @@ export default function App() {
           />
         </nav>
       </div>
-      {offer && (
+      {notifOpen && (
+        <Notifications
+          invites={invites}
+          shares={incoming}
+          replies={replies}
+          seenAt={seenAt}
+          onClose={closeNotifications}
+          onOpen={(item) => { closeNotifications(); setChosen(item); }}
+        />
+      )}
+      {!notifOpen && invite && (
+        <IncomingInvite
+          key={invite.workspace_id}
+          invite={invite}
+          remaining={waitingInvites.length - 1}
+          onLater={() => { setChosen(null); setLater((s) => new Set(s).add(`invite:${invite.workspace_id}`)); }}
+          onDone={(i, joined) => {
+            setChosen(null);
+            setInvites((list) => list.filter((x) => x.workspace_id !== i.workspace_id));
+            if (joined) { reloadWorkspaces().catch(() => {}); loadIncoming(); }
+          }}
+        />
+      )}
+      {!notifOpen && offer && (
         <IncomingShare
           key={offer.id}
           share={offer}
           remaining={waiting.length - 1}
           workspaceName={isSuper && workspaces?.length > 1 ? workspaceLabel(workspaces.find((w) => w.id === offer.workspace_id), user?.id) : ''}
-          onLater={() => setLater((s) => new Set(s).add(offer.id))}
+          onLater={() => { setChosen(null); setLater((x) => new Set(x).add(offer.id)); }}
           onDone={(s, copy) => {
+            setChosen(null);
             setIncoming((list) => list.filter((x) => x.id !== s.id));
             if (copy && copy.workspace_id === wsId) upsertContact(copy);
           }}

@@ -135,9 +135,19 @@ export async function updateFullName(uid, full_name) {
   return data;
 }
 
-export async function updatePassword(password) {
+/** Checks the current password first, then sets the new one. */
+export async function updatePassword(password, current, username) {
+  const check = await supabase.auth.signInWithPassword({ email: usernameToEmail(username), password: current });
+  if (check.error) throw new Error('Your current password is not right.');
   const { error } = await supabase.auth.updateUser({ password });
   fail(error);
+}
+
+/** "Stay private": when on, nobody can add or invite me as a member. */
+export async function setPrivateAccount(uid, on) {
+  const { data, error } = await supabase.from('profiles').update({ private_account: !!on }).eq('id', uid).select().single();
+  fail(error);
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +195,19 @@ export async function addMember(workspaceId, username, role) {
 export async function updateMember(workspaceId, userId, patch) {
   const { error } = await supabase.from('workspace_members').update(patch).eq('workspace_id', workspaceId).eq('user_id', userId);
   fail(error);
+}
+
+/** Invitations waiting for my answer: [{ workspace_id, workspace_name, inviter_name, role, invited_at }]. */
+export async function listMyInvites() {
+  const { data, error } = await supabase.rpc('my_invites');
+  fail(error);
+  return data || [];
+}
+
+/** Accept (join the workspace) or decline (the invitation is removed). */
+export async function respondInvite(workspaceId, accept) {
+  const { error } = await supabase.rpc('respond_invite', { p_workspace: workspaceId, p_accept: accept });
+  fail(error, 'Could not answer the invitation');
 }
 
 export async function removeMember(workspaceId, userId) {
@@ -309,6 +332,19 @@ const SHARE_SELECT =
 function flattenShare(s) {
   const { sender, ...rest } = s;
   return { ...rest, sender_name: sender?.full_name || sender?.username || 'A member' };
+}
+
+/** Answers to cards I shared, newest first: shares with recipient_name. */
+export async function listShareReplies(uid) {
+  const { data, error } = await supabase
+    .from('card_shares')
+    .select(`${SHARE_SELECT}, recipient:profiles!card_shares_recipient_id_fkey(username, full_name)`)
+    .eq('sender_id', uid)
+    .in('status', ['accepted', 'declined'])
+    .order('responded_at', { ascending: false })
+    .limit(20);
+  fail(error);
+  return (data || []).map(({ recipient, ...s }) => ({ ...flattenShare(s), recipient_name: recipient?.full_name || recipient?.username || 'A member' }));
 }
 
 /** Offer a card to a member of the same workspace. */

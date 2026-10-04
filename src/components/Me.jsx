@@ -7,6 +7,7 @@ export default function Me() {
   const { api, profile, setProfile, workspaces, workspace, switchWorkspace, reloadWorkspaces, toast, setView } = useApp();
   const [name, setName] = useState(profile.full_name || '');
   const [savingName, setSavingName] = useState(false);
+  const [pwNow, setPwNow] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [pwError, setPwError] = useState('');
@@ -31,14 +32,29 @@ export default function Me() {
     }
   };
 
+  const [savingPrivate, setSavingPrivate] = useState(false);
+  const savePrivate = async (on) => {
+    setSavingPrivate(true);
+    try {
+      setProfile(await api.setPrivateAccount(profile.id, on));
+      toast(on ? "You're private. Nobody can add you to a team." : 'People can invite you to their team again.');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setSavingPrivate(false);
+    }
+  };
+
   const savePw = async (e) => {
     e.preventDefault();
     setPwError('');
+    if (!pwNow) return setPwError('Enter your current password.');
     if (pw.length < 8) return setPwError('Use at least 8 characters.');
     if (pw !== pw2) return setPwError('The two passwords do not match.');
     setSavingPw(true);
     try {
-      await api.updatePassword(pw);
+      await api.updatePassword(pw, pwNow, profile.username);
+      setPwNow('');
       setPw('');
       setPw2('');
       markPwSaved();
@@ -81,6 +97,7 @@ export default function Me() {
       <div className="me-head panel">
         <Avatar name={profile.full_name || profile.username} size={56} />
         <div>
+          <p className="me-eyebrow muted small">My account</p>
           <h1 className="h2">{profile.full_name || profile.username}</h1>
           <p className="mono muted">@{profile.username}</p>
           {profile.is_super_admin && <Pill tone="accent" icon="shield">Super admin</Pill>}
@@ -107,6 +124,10 @@ export default function Me() {
       <form className="panel" onSubmit={savePw}>
         <h2 className="h3">Change password</h2>
         <input type="text" autoComplete="username" value={profile.username} readOnly hidden />
+        <div className="field">
+          <label htmlFor="me-pw0">Current password</label>
+          <input id="me-pw0" type="password" autoComplete="current-password" value={pwNow} onChange={(e) => setPwNow(e.target.value)} />
+        </div>
         <div className="grid-2">
           <div className="field">
             <label htmlFor="me-pw">New password</label>
@@ -120,6 +141,20 @@ export default function Me() {
         {pwError && <p className="form-error" role="alert">{pwError}</p>}
         <button type="submit" className="btn btn-primary" disabled={savingPw || !pw}><SaveLabel saving={savingPw} saved={pwSaved}>Change password</SaveLabel></button>
       </form>
+
+      <section className="panel" aria-labelledby="me-privacy">
+        <h2 id="me-privacy" className="h3">Privacy</h2>
+        <label className="feature-switch">
+          <input type="checkbox" role="switch" checked={!!profile.private_account} disabled={savingPrivate}
+            onChange={(e) => savePrivate(e.target.checked)} />
+          <span>
+            <strong>Stay private</strong>{' '}
+            {savingPrivate ? <span className="muted small">Saving…</span>
+              : <span className={`small ${profile.private_account ? 'feature-on' : 'feature-off'}`}>{profile.private_account ? 'On' : 'Off'}</span>}
+            <span className="help block">When this is on, nobody can find you by your username, so nobody can add you to their team or send you an invitation. People can still share cards with you in teams you're already in.</span>
+          </span>
+        </label>
+      </section>
 
       {!isSuper && (workspaces || []).length > 1 && (
         <section className="panel" aria-labelledby="me-ws">

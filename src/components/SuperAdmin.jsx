@@ -416,7 +416,7 @@ function Workspaces({ workspaces, reload, toast }) {
                                 <span className="grow"><strong>{m.full_name || m.username}</strong> <span className="mono small muted">@{m.username}</span></span>
                                 <span className="small">{m.role}{owner ? ' · owner' : ''}</span>
                                 <Pill tone={st.tone}>{st.label}</Pill>
-                                {m.status === 'active'
+                                {m.status === 'invited' ? null : m.status === 'active'
                                   ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMember(w.id, m, 'revoked')}>Revoke</button>
                                   : <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMember(w.id, m, 'active')}>Restore</button>}
                               </li>

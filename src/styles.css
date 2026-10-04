@@ -1189,3 +1189,19 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .type-row { display: flex; gap: 8px; align-items: center; }
 .type-row input { flex: 1; min-width: 0; }
 .prospect-toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Notifications bell and list */
+.bell-btn { position: relative; margin-left: auto; flex: none; }
+.topnav ~ .bell-btn, .demo-badge ~ .bell-btn, .bell-btn ~ .refresh-btn { margin-left: 0; }
+.bell-count {
+  position: absolute; top: -1px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--danger, #c62828); color: #fff; font: 700 10px/16px var(--font-sans, inherit); text-align: center;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.notif-head { margin: 4px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3, var(--ink-2)); }
+.notif-head ~ .notif-head { margin-top: 18px; }
+.notif-list { list-style: none; margin: 0; padding: 0; }
+.notif-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.notif-list li:first-child { border-top: 0; }
+.notif-list li.is-new strong::after { content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 0 2px 6px; border-radius: 50%; background: var(--accent); }
+.me-eyebrow { margin: 0 0 2px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }

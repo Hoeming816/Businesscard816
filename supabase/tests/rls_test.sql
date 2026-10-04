@@ -34,8 +34,9 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000b', 'bob@u',   '{"username":"bob","full_name":"Bob Editor"}'),
   ('00000000-0000-0000-0000-00000000000c', 'carol@u', '{"username":"carol","full_name":"Carol Viewer"}'),
   ('00000000-0000-0000-0000-00000000000d', 'dave@u',  '{"username":"dave","full_name":"Dave Outsider"}'),
-  ('00000000-0000-0000-0000-00000000000e', 'sam@u',   '{"username":"sam","full_name":"Sam Super"}');
-update public.profiles set is_super_admin = true where username = 'sam';
+  ('00000000-0000-0000-0000-00000000000e', 'hoeming816@u', '{"username":"hoeming816","full_name":"Sam Super"}');
+update public.profiles set is_super_admin = true where username = 'hoeming816';
+select pg_temp.fails($$update public.profiles set is_super_admin = true where username = 'alice'$$, 'only hoeming816 can ever be super admin, even from the SQL editor');
 update public.profiles set features = '{"meeting": true}' where not is_super_admin; -- meeting is off by default (tested below)
 
 select pg_temp.ok((select count(*) from public.profiles) = 5, 'profiles created by trigger');
@@ -47,11 +48,40 @@ select id as ws_dave from public.workspaces where owner_id = '00000000-0000-0000
 
 -- ---------------------------------------------------------------- alice (admin)
 set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+update public.profiles set private_account = true where id = auth.uid();
+select pg_temp.ok((select private_account from public.profiles where id = auth.uid()), 'user can turn on stay private');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+update public.profiles set private_account = false where id = '00000000-0000-0000-0000-00000000000d';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.fails($$select public.add_member('$$ || :'ws' || $$', 'dave', 'viewer')$$, 'private user cannot be found or invited, and others cannot switch it off');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+update public.profiles set private_account = false where id = auth.uid();
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 
 select pg_temp.ok((select role from public.add_member(:'ws', 'bob', 'editor')) = 'editor', 'admin adds editor by username');
 select pg_temp.ok((select role from public.add_member(:'ws', 'carol', 'viewer')) = 'viewer', 'admin adds viewer');
 select pg_temp.fails($$select public.add_member('$$ || :'ws' || $$', 'nobody', 'viewer')$$, 'unknown username rejected');
+select pg_temp.ok((select count(*) from public.workspace_members where workspace_id = :'ws' and status = 'invited') = 2, 'adding a member sends an invitation');
+select pg_temp.fails($$update public.workspace_members set status = 'active' where user_id = '00000000-0000-0000-0000-00000000000b'$$, 'admin cannot accept for the invitee');
+
+-- ---------------------------------------------------------------- invitations
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(public.ws_role(:'ws') is null, 'invitee has no access before accepting');
+select pg_temp.ok((select inviter_name is not null and role = 'editor' from public.my_invites() where workspace_id = :'ws'), 'invitee sees the invitation and who sent it');
+update public.workspace_members set status = 'active' where user_id = auth.uid() and workspace_id = :'ws';
+select pg_temp.ok(public.ws_role(:'ws') is null, 'invitee cannot skip the accept step');
+select public.respond_invite(:'ws', true);
+select pg_temp.ok(public.ws_role(:'ws') = 'editor', 'accepting the invitation joins the workspace');
+select pg_temp.ok(not exists (select 1 from public.my_invites()), 'accepted invitation is gone');
+select pg_temp.fails($$select public.respond_invite('$$ || :'ws' || $$', true)$$, 'cannot answer an invitation twice');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select pg_temp.ok(not exists (select 1 from public.my_invites()), 'others do not see the invitation');
+select pg_temp.fails($$select public.respond_invite('$$ || :'ws' || $$', true)$$, 'cannot accept someone else''s invitation');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select public.respond_invite(:'ws', true);
+select pg_temp.ok(public.ws_role(:'ws') = 'viewer', 'second invitee accepts');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 
 insert into public.contacts (id, workspace_id, full_name, company)
 values ('10000000-0000-0000-0000-000000000001', :'ws', 'Alice Card', 'Acme');
@@ -188,6 +218,14 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 update public.workspace_members set role = 'editor', status = 'active'
  where workspace_id = :'ws' and user_id = '00000000-0000-0000-0000-00000000000b';
 select public.add_member(:'ws', 'carol', 'viewer');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select public.respond_invite(:'ws', false);
+select pg_temp.ok(not exists (select 1 from public.workspace_members where user_id = auth.uid() and workspace_id = :'ws'), 'declining removes the invitation');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select public.add_member(:'ws', 'carol', 'viewer');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000c', false);
+select public.respond_invite(:'ws', true);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 insert into storage.objects (bucket_id, name) values ('cards', :'ws' || '/10000000-0000-0000-0000-000000000002/front-9.jpg');
 update public.contacts
    set front_path = :'ws' || '/10000000-0000-0000-0000-000000000002/front-9.jpg',
