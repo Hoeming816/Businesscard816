@@ -398,6 +398,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 }
 .ws-icon { position: absolute; left: 10px; color: var(--ink-3); pointer-events: none; }
 .ws-caret { position: absolute; right: 10px; color: var(--ink-3); pointer-events: none; }
+.ws-single {
+  min-height: 36px; padding: 0 14px 0 32px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); font-weight: 550; font-size: 14px;
+}
+.ws-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-empty { color: var(--ink-3); font-size: 14px; }
 
 .topnav { display: flex; gap: 2px; margin-left: 8px; flex: 1; }

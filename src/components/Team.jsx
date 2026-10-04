@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { workspaceLabel } from '../workspaceLabel.js';
 import { useApp } from '../context.js';
 import { Icon, Avatar, Pill, ConfirmButton, SaveLabel, useJustSaved, formatDate } from './ui.jsx';
 
@@ -78,7 +79,7 @@ export default function Team() {
   const leave = async () => {
     try {
       await api.removeMember(workspace.id, uid);
-      toast(`You left ${workspace.name}`);
+      toast(`You left ${workspaceLabel(workspace, uid)}`);
       await reloadWorkspaces();
     } catch (e) {
       toast(e.message, 'error');
@@ -104,7 +105,7 @@ export default function Team() {
           </form>
         ) : (
           <div className="title-row">
-            <h1 className="h1">{workspace.name}</h1>
+            <h1 className="h1">{workspace.owner_id === uid ? workspace.name : workspaceLabel(workspace, uid)}</h1>
             {isAdmin && (
               <button type="button" className="icon-btn" onClick={() => { setName(workspace.name); setRenaming(true); }} aria-label="Rename workspace">
                 <Icon name="edit" size={17} />
@@ -207,8 +208,8 @@ export default function Team() {
       {!isOwner && (
         <section className="panel danger-zone">
           <h2 className="h3">Leave workspace</h2>
-          <p className="help">Your cards in {workspace.name} stay there, and nobody else can see them.</p>
-          <ConfirmButton icon="logout" confirmLabel="Leave workspace" message={`Leave ${workspace.name}?`} onConfirm={leave}>
+          <p className="help">Your cards in {workspaceLabel(workspace, uid)} stay there, and nobody else can see them.</p>
+          <ConfirmButton icon="logout" confirmLabel="Leave workspace" message={`Leave ${workspaceLabel(workspace, uid)}?`} onConfirm={leave}>
             Leave workspace
           </ConfirmButton>
         </section>

@@ -8,6 +8,7 @@ import { Icon, Logo, Avatar, Spinner } from './components/ui.jsx';
 import AuthScreen, { SuspendedScreen } from './components/Auth.jsx';
 import Home, { resetHomeSection } from './components/Home.jsx';
 import Scan from './components/Scan.jsx';
+import { switcherLabel, workspaceLabel } from './workspaceLabel.js';
 import Team from './components/Team.jsx';
 import SuperAdmin from './components/SuperAdmin.jsx';
 import Me from './components/Me.jsx';
@@ -350,7 +351,7 @@ export default function App() {
           key={offer.id}
           share={offer}
           remaining={waiting.length - 1}
-          workspaceName={workspaces?.length > 1 ? workspaces.find((w) => w.id === offer.workspace_id)?.name : ''}
+          workspaceName={workspaces?.length > 1 ? workspaceLabel(workspaces.find((w) => w.id === offer.workspace_id), user?.id) : ''}
           onLater={() => setLater((s) => new Set(s).add(offer.id))}
           onDone={(s, copy) => {
             setIncoming((list) => list.filter((x) => x.id !== s.id));
@@ -373,15 +374,23 @@ function TabbarItem({ icon, label, active, onClick }) {
 }
 
 function WorkspaceSwitcher() {
-  const { workspaces, workspace, switchWorkspace } = useApp();
+  const { workspaces, workspace, switchWorkspace, uid } = useApp();
   if (!workspaces || !workspaces.length) return <span className="ws-switch ws-empty">No workspace</span>;
+  if (workspaces.length === 1) {
+    return (
+      <span className="ws-switch ws-single">
+        <Icon name="building" size={16} className="ws-icon" />
+        <span className="ws-name">{switcherLabel(workspace, uid, 1)}</span>
+      </span>
+    );
+  }
   return (
     <label className="ws-switch">
       <span className="sr-only">Workspace</span>
       <Icon name="building" size={16} className="ws-icon" />
       <select value={workspace?.id || ''} onChange={(e) => switchWorkspace(e.target.value)}>
         {workspaces.map((w) => (
-          <option key={w.id} value={w.id}>{w.name} · {w.role}</option>
+          <option key={w.id} value={w.id}>{switcherLabel(w, uid, workspaces.length)}</option>
         ))}
       </select>
       <Icon name="chevronDown" size={14} className="ws-caret" />
