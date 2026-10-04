@@ -14,7 +14,7 @@ const SECTIONS = [
   { value: 'cards', label: 'Business Cards', img: cardsIcon },
   { value: 'minutes', label: 'Meeting', img: meetingIcon, feature: 'meeting' },
   { value: 'todo', label: 'To Do List', img: todoIcon, feature: 'todo' },
-  { value: 'notes', label: 'Quick Notes', img: noteIcon },
+  { value: 'notes', label: 'Quick Notes', img: noteIcon, feature: 'notes' },
 ];
 
 // Which section is open, kept for this browser tab so Scan, Team or a refresh
@@ -24,14 +24,14 @@ const readSection = () => { try { return sessionStorage.getItem(SECTION_KEY) || 
 export function resetHomeSection() { try { sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ } }
 
 /**
- * The home screen. With Meeting or To Do List on: a selection page with a tile
+ * The home screen. With Meeting, To Do List or Quick Notes on: a selection page with a tile
  * for each section, each opening with a Back button to return here. Without
  * them (the default): just the card list.
  */
 export default function Home() {
   const { can, tasks } = useApp();
   const [section, setSectionRaw] = useState(readSection);
-  const picker = can('meeting') || can('todo');
+  const picker = can('meeting') || can('todo') || can('notes');
   const sections = SECTIONS.filter((s) => !s.feature || can(s.feature));
   const setSection = (v) => {
     setSectionRaw(v);

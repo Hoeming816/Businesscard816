@@ -66,7 +66,7 @@ export async function requireCaller(req: Request): Promise<Caller> {
 }
 
 // Features that stay off until a super admin turns them on (src/features.js).
-const OFF_BY_DEFAULT = new Set(["meeting", "todo"]);
+const OFF_BY_DEFAULT = new Set(["meeting", "todo", "notes"]);
 
 // Refuses a feature that is off for this user. Super admins have everything.
 export function requireFeature(caller: Caller, feature: string, label: string) {

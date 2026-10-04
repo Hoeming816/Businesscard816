@@ -321,7 +321,7 @@ function FeatureSwitches({ p, onSaved }) {
           </label>
         );
       })}
-      <p className="help">{p.is_super_admin ? 'Super admins always have every feature. ' : 'New accounts get Business Cards only; turn on Meeting to give them the Meeting Minutes tab. '}Changes take effect the next time they open the app, and are enforced on the server too.</p>
+      <p className="help">{p.is_super_admin ? 'Super admins always have every feature. ' : 'New accounts get Business Cards only; turn on Meeting, To Do List or Quick Notes to add those tabs to their home page. '}Changes take effect the next time they open the app, and are enforced on the server too.</p>
     </fieldset>
   );
 }
