@@ -61,8 +61,7 @@ export default function SharePanel({ contact, onClose }) {
       </p>
       {shares === null ? <Spinner /> : people.length === 0 ? (
         <p className="notice">
-          There's no one to share with yet. Cards go to other members of this workspace who are editors or admins.
-          Add them on the <strong>Team</strong> page first.
+          There's no one to share with yet. You can share cards once you've joined a team.
         </p>
       ) : (
         <ul className="share-list">
