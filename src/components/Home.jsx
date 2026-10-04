@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../context.js';
 import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
 import { Icon } from './ui.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
+import todoIcon from '../assets/tab-todo-list.png';
+import noteIcon from '../assets/tab-quick-notes.png';
 
 const SECTIONS = [
   { value: 'cards', label: 'Business Cards', img: cardsIcon },
   { value: 'minutes', label: 'Meeting', img: meetingIcon },
+  { value: 'todo', label: 'To Do List', img: todoIcon },
+  { value: 'notes', label: 'Quick Notes', img: noteIcon },
 ];
 
 // Which section is open, kept for this browser tab so Scan, Team or a refresh
@@ -31,27 +35,43 @@ export default function Home() {
     try { if (v) sessionStorage.setItem(SECTION_KEY, v); else sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ }
   };
 
-  if (!SECTIONS.some((s) => s.value === section)) {
-    return (
-      <div className="home home-pick">
-        <h1 className="sr-only">Choose where to go</h1>
-        <div className="home-tiles">
-          {SECTIONS.map((s) => (
-            <button key={s.value} type="button" className="home-tile" onClick={() => setSection(s.value)}>
-              <img src={s.img} alt="" />
-              <span>{s.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (!SECTIONS.some((s) => s.value === section)) return <HomePick onPick={setSection} />;
   return (
     <div className="home">
       <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>
         <Icon name="chevronLeft" size={16} /> Back
       </button>
-      {section === 'cards' ? <Contacts /> : <Minutes />}
+      {section === 'cards' ? <Contacts /> : section === 'minutes' ? <Minutes /> : <ComingSoon section={SECTIONS.find((s) => s.value === section)} />}
+    </div>
+  );
+}
+
+/** The selection page, centred in the screen. */
+function HomePick({ onPick }) {
+  // Signing in can leave the page scrolled (the phone keyboard); start at the top.
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+  return (
+    <div className="home home-pick">
+      <h1 className="sr-only">Choose where to go</h1>
+      <div className="home-tiles">
+        {SECTIONS.map((s) => (
+          <button key={s.value} type="button" className="home-tile" onClick={() => onPick(s.value)}>
+            <img src={s.img} alt="" />
+            <span>{s.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** To Do List and Quick Notes aren't built yet; their tiles open this. */
+function ComingSoon({ section }) {
+  return (
+    <div className="empty">
+      <img src={section.img} alt="" width="96" height="96" />
+      <h3>{section.label}</h3>
+      <p>Coming soon.</p>
     </div>
   );
 }

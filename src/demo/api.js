@@ -108,7 +108,11 @@ export async function usernameAvailable(username) {
   const u = String(username || '').toLowerCase();
   return /^[a-z0-9._-]{3,30}$/.test(u) && !db.profiles.some((p) => p.username === u);
 }
+export function setKeepSignedIn(on) {
+  db.keepSignedIn = !!on;
+}
 export async function signOut() {
+  db.keepSignedIn = false;
   db.session = null;
   emit();
 }

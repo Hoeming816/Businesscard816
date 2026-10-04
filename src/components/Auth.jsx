@@ -19,6 +19,7 @@ export default function AuthScreen({ onSuspended }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [avail, setAvail] = useState(null); // null | 'checking' | true | false
+  const [keep, setKeep] = useState(false);
 
   const uname = username.trim().toLowerCase();
   const unameValid = USERNAME_RE.test(uname);
@@ -51,6 +52,7 @@ export default function AuthScreen({ onSuspended }) {
     }
     setBusy(true);
     try {
+      api.setKeepSignedIn(keep);
       if (mode === 'signup') {
         if (!(await api.usernameAvailable(uname))) throw new Error('That username is already taken.');
         await api.signUp({ username: uname, password, full_name: fullName });
@@ -139,6 +141,10 @@ export default function AuthScreen({ onSuspended }) {
             />
             {mode === 'signup' && <p className="help">At least 8 characters.</p>}
           </div>
+          <label className="check auth-keep">
+            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
+            Keep me signed in
+          </label>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
