@@ -135,9 +135,19 @@ export async function updateFullName(uid, full_name) {
   return data;
 }
 
-export async function updatePassword(password) {
+/** Checks the current password first, then sets the new one. */
+export async function updatePassword(password, current, username) {
+  const check = await supabase.auth.signInWithPassword({ email: usernameToEmail(username), password: current });
+  if (check.error) throw new Error('Your current password is not right.');
   const { error } = await supabase.auth.updateUser({ password });
   fail(error);
+}
+
+/** "Stay private": when on, nobody can add or invite me as a member. */
+export async function setPrivateAccount(uid, on) {
+  const { data, error } = await supabase.from('profiles').update({ private_account: !!on }).eq('id', uid).select().single();
+  fail(error);
+  return data;
 }
 
 // ---------------------------------------------------------------------------

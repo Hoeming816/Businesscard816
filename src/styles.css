@@ -1199,3 +1199,4 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .notif-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .notif-list li:first-child { border-top: 0; }
 .notif-list li.is-new strong::after { content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 0 2px 6px; border-radius: 50%; background: var(--accent); }
+.me-eyebrow { margin: 0 0 2px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }

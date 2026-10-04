@@ -7,6 +7,9 @@ alter table public.workspace_members drop constraint if exists workspace_members
 alter table public.workspace_members add constraint workspace_members_status_check
   check (status in ('active', 'revoked', 'invited'));
 
+-- "Stay private": nobody can add or invite this person. Their own switch.
+alter table public.profiles add column if not exists private_account boolean not null default false;
+
 -- Adding a member: invite them, or just change the role of an active member.
 create or replace function public.add_member(p_workspace uuid, p_username text, p_role text)
 returns public.workspace_members
@@ -27,6 +30,10 @@ begin
   end if;
   if target = (select owner_id from workspaces where id = p_workspace) then
     raise exception 'that person owns this workspace';
+  end if;
+  if (select private_account from profiles where id = target)
+     and not exists (select 1 from workspace_members where workspace_id = p_workspace and user_id = target and status = 'active') then
+    raise exception 'This person isn''t accepting invitations.';
   end if;
 
   insert into workspace_members (workspace_id, user_id, role, status, added_by)

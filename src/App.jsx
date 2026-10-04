@@ -367,7 +367,7 @@ export default function App() {
             <span className="tabbar-label">Scan</span>
           </button>
           {isSuper && <TabbarItem icon="shield" label="Admin" active={view === 'admin'} onClick={() => go('admin')} />}
-          <TabbarItem icon="user" label="Me" active={view === 'me'} onClick={() => go('me')} />
+          <TabbarItem icon="user" label="Account" active={view === 'me'} onClick={() => go('me')} />
           <input
             ref={quickCam}
             type="file"

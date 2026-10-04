@@ -123,9 +123,17 @@ export async function updateFullName(id, full_name) {
   p.full_name = full_name;
   return clone(p);
 }
-export async function updatePassword(password) {
+export async function updatePassword(password, current) {
   await sleep(250);
+  if (!current) throw new Error('Your current password is not right.');
   if (String(password).length < 8) throw new Error('Password should be at least 8 characters.');
+}
+export async function setPrivateAccount(id, on) {
+  await tick();
+  if (id !== uid()) deny();
+  const p = profile(id);
+  p.private_account = !!on;
+  return clone(p);
 }
 
 export async function listMyWorkspaces(id) {
@@ -171,6 +179,7 @@ export async function addMember(ws, username, role) {
   const w = db.workspaces.find((x) => x.id === ws);
   if (w.owner_id === p.id) throw new Error('that person owns this workspace');
   const existing = db.members.find((m) => m.workspace_id === ws && m.user_id === p.id);
+  if (p.private_account && existing?.status !== 'active') throw new Error("This person isn't accepting invitations.");
   if (existing?.status === 'active') existing.role = role;
   else if (existing) Object.assign(existing, { role, status: 'invited', added_by: uid(), created_at: now() });
   else db.members.push({ workspace_id: ws, user_id: p.id, role, status: 'invited', added_by: uid(), created_at: now() });
