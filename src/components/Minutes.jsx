@@ -7,6 +7,7 @@ import { canEditInteraction } from '../perms.js';
 import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
+import { useBack } from '../back.js';
 import MeetingView, { MinutesLanguage } from './MeetingView.jsx';
 import { Icon, EmptyState, Spinner, ConfirmButton, Pill, formatDate, formatDuration } from './ui.jsx';
 
@@ -68,6 +69,7 @@ export default function Minutes() {
 
   // One meeting opened from the list: show it on its own, with Back to the list.
   const current = expanded && items ? items.find((i) => i.id === expanded) : null;
+  useBack(() => setExpanded(null), !!current);
   if (current) {
     const i = current;
     const c = byId.get(i.contact_id);
