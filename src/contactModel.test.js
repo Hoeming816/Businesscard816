@@ -54,4 +54,8 @@ describe('overwriting an existing card', () => {
     expect(p).not.toHaveProperty('full_name');
     expect(p).not.toHaveProperty('phones');
   });
+
+  it('does not take the contact type from a scanned card', () => {
+    expect(draftFromScan({ full_name: 'Z', contact_type: 'Prospect' }).contact_type).toBe(blankDraft().contact_type);
+  });
 });
