@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { toISODate } from '../filters.js';
 import { cleanTask, dueLabel, filterTasks, groupTasks, isDone, myDay, nowHHMM, parseQuickAdd, repeatLabel } from '../todo.js';
+import { MINUTES_LANGUAGES } from '../minutes.js';
 import { canRecord, extFor, pickMime } from './Recorder.jsx';
 import TaskEditor from './TaskEditor.jsx';
 import TaskCalendar from './TaskCalendar.jsx';
@@ -26,6 +27,11 @@ const MAX_VOICE_SEC = 30;
 
 const clockNow = () => { const n = new Date(); return { today: toISODate(n), time: nowHHMM(n) }; };
 // Chinese text, or Tagalog words the quick parser doesn't know, go to the AI reader.
+// The language spoken tasks are written in: English unless another is picked, kept on this device.
+const VOICE_LANG_KEY = 'nomiqo.voiceLanguage';
+const readVoiceLang = () => {
+  try { const v = localStorage.getItem(VOICE_LANG_KEY); return MINUTES_LANGUAGES.some((l) => l.value === v) ? v : 'English'; } catch { return 'English'; }
+};
 const NEEDS_AI = /[㐀-鿿]|\b(bukas|mamaya|ngayon|mamayang|alas|lunes|martes|miyerkules|huwebes|biyernes|sabado|linggo|tuwing|araw-araw|paalala|tawagan|kailangan|sa susunod)\b/i;
 
 /** The To Do List: one add box (type or speak), Today, All tasks and Calendar. */
@@ -88,6 +94,8 @@ function QuickAdd({ onAdded, onMore }) {
   const { api, toast, upsertTask } = useApp();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState('');
+  const [lang, setLangRaw] = useState(readVoiceLang);
+  const setLang = (v) => { setLangRaw(v); try { localStorage.setItem(VOICE_LANG_KEY, v); } catch { /* private mode */ } };
   const input = useRef(null);
   const preview = useMemo(() => (text.trim() && !NEEDS_AI.test(text) ? parseQuickAdd(text) : null), [text]);
   const today = toISODate(new Date());
@@ -139,7 +147,7 @@ function QuickAdd({ onAdded, onMore }) {
           disabled={!!busy && busy !== 'add'}
           maxLength={500}
         />
-        <VoiceButton disabled={!!busy} onBusy={setBusy} onHeard={async ({ text: heard, task }) => {
+        <VoiceButton language={lang} disabled={!!busy} onBusy={setBusy} onHeard={async ({ text: heard, task }) => {
           try { await save(task, heard); } catch (err) { toast(err.message, 'error'); }
         }} />
         <button type="submit" className="btn btn-primary" disabled={!text.trim() || !!busy} aria-label="Add task">
@@ -154,13 +162,24 @@ function QuickAdd({ onAdded, onMore }) {
           <button type="button" className="link" onClick={() => { onMore(preview); setText(''); }}>More options</button>
         </p>
       )}
+      {canRecord && (
+        <label className="quick-add-lang small muted">
+          <Icon name="mic" size={13} /> Voice tasks in
+          <select value={lang} onChange={(e) => setLang(e.target.value)} disabled={!!busy}>
+            {MINUTES_LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+        </label>
+      )}
       {busy === 'voice' && <p className="quick-add-hint small" role="status"><Spinner /> Working out your task…</p>}
     </form>
   );
 }
 
-/** Tap to speak, tap again to stop. The recording is turned into a task by AI, in English, Mandarin or Tagalog. */
-function VoiceButton({ onHeard, onBusy, disabled }) {
+/**
+ * Tap to speak, tap again to stop. The recording is turned into a task by AI, written in
+ * `language` (English by default); Mandarin or Tagalog speech is translated into it.
+ */
+function VoiceButton({ language, onHeard, onBusy, disabled }) {
   const { api, toast } = useApp();
   const [on, setOn] = useState(false);
   const [secs, setSecs] = useState(0);
@@ -195,7 +214,7 @@ function VoiceButton({ onHeard, onBusy, disabled }) {
         if (!blob.size || Date.now() - startedAt < 600) { toast('Nothing was heard. Tap the mic and speak, then tap it again.', 'error'); return; }
         onBusy('voice');
         try {
-          onHeard(await api.voiceTask(blob, extFor(type), clockNow()));
+          onHeard(await api.voiceTask(blob, extFor(type), clockNow(), language));
         } catch (e) {
           toast(e.message, 'error');
         } finally {
@@ -223,7 +242,7 @@ function VoiceButton({ onHeard, onBusy, disabled }) {
       onClick={on ? stop : start}
       disabled={disabled && !on}
       aria-label={on ? 'Stop and add the task' : 'Say a task'}
-      title={on ? 'Tap to stop' : 'Say a task (English, 中文 or Tagalog)'}
+      title={on ? 'Tap to stop' : 'Say a task'}
     >
       <Icon name={on ? 'stop' : 'mic'} size={18} />
       {on && <span className="mono small">{secs}s</span>}

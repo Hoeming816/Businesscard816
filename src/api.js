@@ -575,10 +575,14 @@ export async function aiTask(text, clock) {
   return data.task;
 }
 
-/** Speech to task: transcribes a short recording, then reads it like aiTask. Returns { text, task }. */
-export async function voiceTask(blob, ext, clock) {
+/**
+ * Speech to task: transcribes a short recording, then reads it like aiTask. The task is
+ * written in `language` (English, Chinese or Tagalog), whatever was said. Returns { text, task }.
+ */
+export async function voiceTask(blob, ext, clock, language = 'English') {
   const form = new FormData();
   form.append('action', 'voice');
+  form.append('language', language);
   form.append('today', clock.today);
   form.append('time', clock.time);
   form.append('audio', blob, `task.${ext}`);

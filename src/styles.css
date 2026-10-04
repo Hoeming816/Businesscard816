@@ -1250,6 +1250,8 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .voice-btn { padding: 0 14px; gap: 5px; }
 .quick-add-hint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--accent-soft-ink); padding-left: 4px; }
 .quick-add-hint .link { font-size: 13px; margin-left: 6px; }
+.quick-add-lang { display: flex; align-items: center; gap: 6px; padding-left: 4px; }
+.quick-add-lang select { width: auto; min-height: 0; padding: 2px 24px 2px 8px; font-size: 13px; }
 
 .task-group { display: grid; gap: 8px; }
 .task-group-h { font: 650 13px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); display: flex; align-items: center; gap: 8px; }

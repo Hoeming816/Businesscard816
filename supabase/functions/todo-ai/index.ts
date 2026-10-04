@@ -1,9 +1,11 @@
 // todo-ai: turns a typed or spoken sentence into a task for the To Do List
 // ("Remind me to call Peter tomorrow 10am" -> title, date, time, reminders).
-// Works in English, Mandarin and Tagalog/Taglish: the task keeps the language
-// it was said in, and dates and times are read whatever the language.
+// Works in English, Mandarin and Tagalog/Taglish, and dates and times are read
+// whatever the language. A typed task keeps the language it was typed in; a
+// spoken one is written in the voice language picked in the app (English
+// unless Chinese or Tagalog is chosen), translated if something else was said.
 // Voice is transcribed through the Vercel AI Gateway (AI_GATEWAY_API_KEY), or
-// OpenAI directly (OPENAI_API_KEY), with the spoken language detected.
+// OpenAI directly (OPENAI_API_KEY), with that language as the hint.
 import { HttpError, json, requireCaller, requireFeature, serve } from "../_shared/http.ts";
 import { structuredReply } from "../_shared/claude.ts";
 
@@ -35,8 +37,8 @@ const TASK_SCHEMA = {
 const SYSTEM = `You turn one sentence someone typed or said into a task for their to-do list. It may be in English, Mandarin Chinese, or Tagalog (including Taglish, Tagalog mixed with English).
 
 Return:
-- title: the task itself as a short imperative ("Call Peter", "Send quotation to Acme", "打电话给Peter", "Tawagan si Peter"). Write it in the language the person used (for Taglish keep their mix). Leave out the date, time, repeat, priority words and lead-ins such as "remind me to", "提醒我", "paalala", "pakipaalala".
-- notes: any extra detail that is not part of the title (who, what to bring, numbers); empty string if none.
+- title: the task itself as a short imperative ("Call Peter", "Send quotation to Acme", "打电话给Peter", "Tawagan si Peter"). LANGUAGE_RULE Leave out the date, time, repeat, priority words and lead-ins such as "remind me to", "提醒我", "paalala", "pakipaalala".
+- notes: any extra detail that is not part of the title (who, what to bring, numbers), in the same language as the title; empty string if none.
 - due_on: the date as YYYY-MM-DD, worked out from today's date given below ("tomorrow"/"明天"/"bukas", "Friday"/"星期五"/"周五"/"Biyernes", "next week", "on the 15th"). Empty string if no day was said. A weekday means the next one from today (today itself if it is that day).
 - due_time: 24-hour HH:MM when a time was said ("10am", "下午三点" = 15:00, "alas tres ng hapon" = 15:00, "mamayang gabi" = 20:00 today, "morning"/"早上"/"umaga" = 09:00). Empty string if none. If only a time was said, due_on is today when that time is still ahead, otherwise tomorrow.
 - priority: Urgent when it says urgent, ASAP, 紧急, 急, "agad", "importante agad"; High for important or high priority, 重要; Low for low priority or "whenever"; otherwise Normal.
@@ -48,6 +50,18 @@ Return:
 
 Only use what is in the sentence; never invent people, dates or details.`;
 
+// Voice languages offered in the app, with the speech recognition hint for each.
+const VOICE_LANGUAGES: Record<string, { name: string; code: string }> = {
+  English: { name: "English", code: "en" },
+  Chinese: { name: "Simplified Chinese (中文)", code: "zh" },
+  Tagalog: { name: "Tagalog", code: "tl" },
+};
+const voiceLanguage = (v: unknown) => VOICE_LANGUAGES[String(v ?? "")] ?? VOICE_LANGUAGES.English;
+
+const systemFor = (output: string | null) => SYSTEM.replace("LANGUAGE_RULE", output
+  ? `Write it in ${output}${output === "Tagalog" ? " (Taglish is fine)" : ""}; if the sentence is in another language, translate it into natural ${output}. Keep people's names, company and product terms, and numbers as said.`
+  : "Write it in the language the person used (for Taglish keep their mix).");
+
 type Raw = {
   title: string; notes: string; due_on: string; due_time: string; priority: string; reminders: number[];
   repeat_freq: string; repeat_interval: number; repeat_days: number[]; category: string; tags: string[]; subtasks: string[];
@@ -57,7 +71,7 @@ const isoDate = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? "")) ? S
 const isoTime = (v: unknown) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(v ?? "")) ? String(v) : "");
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-async function parse(textIn: unknown, todayIn: unknown, timeIn: unknown) {
+async function parse(textIn: unknown, todayIn: unknown, timeIn: unknown, output: string | null = null) {
   const text = String(textIn ?? "").trim().slice(0, 1000);
   if (!text) throw new HttpError(400, "Say or type the task first.");
   const today = isoDate(todayIn) || new Date().toISOString().slice(0, 10);
@@ -65,7 +79,7 @@ async function parse(textIn: unknown, todayIn: unknown, timeIn: unknown) {
   const weekday = WEEKDAYS[new Date(`${today}T00:00:00Z`).getUTCDay()];
 
   const r = await structuredReply<Raw>({
-    system: SYSTEM,
+    system: systemFor(output),
     content: [{ type: "text", text: `Today is ${weekday} ${today}, and the time is ${time}.\n\n<sentence>\n${text}\n</sentence>` }],
     schema: TASK_SCHEMA,
     maxTokens: 2000,
@@ -96,7 +110,7 @@ async function parse(textIn: unknown, todayIn: unknown, timeIn: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// Speech to text (language detected: English, Mandarin, Tagalog, Taglish)
+// Speech to text, with the chosen voice language as the hint
 // ---------------------------------------------------------------------------
 
 const TRANSCRIBE_MODEL = Deno.env.get("AI_GATEWAY_TRANSCRIBE_MODEL") || "openai/whisper-1";
@@ -107,7 +121,7 @@ function toBase64(bytes: Uint8Array) {
   return btoa(bin);
 }
 
-async function viaGateway(key: string, audio: File) {
+async function viaGateway(key: string, audio: File, language: string) {
   const res = await fetch("https://ai-gateway.vercel.sh/v4/ai/transcription-model", {
     method: "POST",
     headers: {
@@ -117,16 +131,17 @@ async function viaGateway(key: string, audio: File) {
       "ai-model-id": TRANSCRIBE_MODEL,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ audio: toBase64(new Uint8Array(await audio.arrayBuffer())), mediaType: audio.type || "audio/webm" }),
+    body: JSON.stringify({ audio: toBase64(new Uint8Array(await audio.arrayBuffer())), mediaType: audio.type || "audio/webm", providerOptions: { openai: { language } } }),
   });
   if (!res.ok) throw new Error(`gateway ${res.status}: ${await res.text()}`);
   return String((await res.json()).text ?? "");
 }
 
-async function viaOpenAI(key: string, audio: File) {
+async function viaOpenAI(key: string, audio: File, language: string) {
   const form = new FormData();
   form.append("file", audio, audio.name || "task.webm");
   form.append("model", "whisper-1");
+  form.append("language", language);
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}` },
@@ -136,16 +151,16 @@ async function viaOpenAI(key: string, audio: File) {
   return String((await res.json()).text ?? "");
 }
 
-async function transcribe(audio: File) {
+async function transcribe(audio: File, language: string) {
   const gatewayKey = Deno.env.get("AI_GATEWAY_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (!gatewayKey && !openaiKey) throw new HttpError(501, "Voice is not set up. Add the AI_GATEWAY_API_KEY (or OPENAI_API_KEY) secret.");
-  const attempts: [string, (k: string, a: File) => Promise<string>][] = [];
+  const attempts: [string, (k: string, a: File, l: string) => Promise<string>][] = [];
   if (gatewayKey) attempts.push([gatewayKey, viaGateway]);
   if (openaiKey) attempts.push([openaiKey, viaOpenAI]);
   for (const [key, run] of attempts) {
     try {
-      return (await run(key, audio)).trim();
+      return (await run(key, audio, language)).trim();
     } catch (e) {
       console.error("transcription error", e instanceof Error ? e.message : e);
     }
@@ -162,9 +177,10 @@ serve(async (req) => {
     const audio = form.get("audio");
     if (!(audio instanceof File) || !audio.size) throw new HttpError(400, "No recording was sent.");
     if (audio.size > MAX_AUDIO_BYTES) throw new HttpError(413, "That recording is too long for a task.");
-    const text = await transcribe(audio);
+    const lang = voiceLanguage(form.get("language"));
+    const text = await transcribe(audio, lang.code);
     if (!text) throw new HttpError(422, "Nothing was heard. Please try again.");
-    return json({ text, task: await parse(text, form.get("today"), form.get("time")) });
+    return json({ text, task: await parse(text, form.get("today"), form.get("time"), lang.name) });
   }
   const body = await req.json().catch(() => ({}));
   if (body.action === "parse") return json({ task: await parse(body.text, body.today, body.time) });
