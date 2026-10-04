@@ -16,6 +16,7 @@ import IncomingShare from './components/IncomingShare.jsx';
 import IncomingInvite from './components/IncomingInvite.jsx';
 import Notifications from './components/Notifications.jsx';
 import TaskReminders from './components/TaskReminders.jsx';
+import { useCurrentBack } from './back.js';
 
 const WS_KEY = 'cardfile.workspace';
 const SIGN_REFRESH_MS = 50 * 60 * 1000; // signed URLs live 1 h; refresh after 50 min
@@ -35,6 +36,7 @@ export default function App() {
   const [tasksState, setTasksState] = useState('idle'); // idle | loading | ready | error
   const [tasksError, setTasksError] = useState('');
   const [view, setView] = useState('contacts');
+  const back = useCurrentBack(); // the open page's Back, also offered in the bottom menu bar
   // Photo taken straight from the Scan tab button; Scan picks it up and clears it.
   const [quickShot, setQuickShot] = useState(null);
   const clearQuickShot = useCallback(() => setQuickShot(null), []);
@@ -58,6 +60,20 @@ export default function App() {
   const [signedVersion, setSignedVersion] = useState(0);
   const signedRef = useRef(new Map()); // `${bucket}:${path}` -> { url, at }
   const pendingRef = useRef(new Set());
+
+  // While typing on a phone, the on-screen keyboard shrinks the view and iOS
+  // Safari lets the fixed tab bar float up mid-page as you scroll. Hide it
+  // until the keyboard closes, so it only ever sits at the bottom.
+  useEffect(() => {
+    const typing = (el) => el?.matches?.('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file]):not([type=range])');
+    let t;
+    const onIn = (e) => { if (typing(e.target)) { clearTimeout(t); document.body.classList.add('typing'); } };
+    // Moving from one field to the next fires focusout then focusin; wait a beat.
+    const onOut = () => { clearTimeout(t); t = setTimeout(() => { if (!typing(document.activeElement)) document.body.classList.remove('typing'); }, 120); };
+    document.addEventListener('focusin', onIn);
+    document.addEventListener('focusout', onOut);
+    return () => { clearTimeout(t); document.removeEventListener('focusin', onIn); document.removeEventListener('focusout', onOut); document.body.classList.remove('typing'); };
+  }, []);
 
   // ----- toasts -----
   const toast = useCallback((message, tone = 'ok') => {
@@ -384,6 +400,7 @@ export default function App() {
         <main id="main" className="main" tabIndex={-1}>{main}</main>
 
         <nav className="tabbar" aria-label="Main">
+          {back && <TabbarItem icon="chevronLeft" label="Back" onClick={() => { back.run(); window.scrollTo(0, 0); }} />}
           <TabbarItem icon="cards" label="Home" active={view === 'contacts'} onClick={() => go('contacts')} />
           {isSuper && <TabbarItem icon="users" label="Team" active={view === 'team'} onClick={() => go('team')} />}
           <button

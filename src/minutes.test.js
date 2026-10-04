@@ -146,3 +146,16 @@ describe('minutes language', () => {
     expect(normaliseMinutes().language).toBe('English');
   });
 });
+
+describe('onDate', () => {
+  it('filters by month or day, and lets everything through otherwise', async () => {
+    const { onDate } = await import('./minutes.js');
+    expect(onDate('2026-10-04', 'month', '2026-10')).toBe(true);
+    expect(onDate('2026-09-30', 'month', '2026-10')).toBe(false);
+    expect(onDate('2026-10-04', 'day', '2026-10-04')).toBe(true);
+    expect(onDate('2026-10-05', 'day', '2026-10-04')).toBe(false);
+    expect(onDate('2026-10-05', 'day', '')).toBe(true);
+    expect(onDate('2026-10-05', 'any', '2026-01-01')).toBe(true);
+    expect(onDate(null, 'month', '2026-10')).toBe(false);
+  });
+});

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../context.js';
+import { useBack } from '../back.js';
 import { addDays, addMonths, startOfMonth, startOfWeek, toISODate } from '../filters.js';
 import { compareTasks, formatLongDay, formatTime, isDone, isOverdue, occurrences } from '../todo.js';
 import TaskRow from './TaskRow.jsx';
@@ -15,6 +16,9 @@ export default function TaskCalendar({ onOpen, onAdd }) {
   const today = toISODate(new Date());
   const [mode, setMode] = useState('month');
   const [day, setDay] = useState(today);
+  const [from, setFrom] = useState('month'); // where a day was opened from, for Back
+  const openDay = (d) => { setFrom(mode); setDay(d); setMode('day'); };
+  useBack(() => setMode(from), mode === 'day' && from !== 'day');
 
   const range = useMemo(() => {
     if (mode === 'day') return [day, day];
@@ -56,7 +60,7 @@ export default function TaskCalendar({ onOpen, onAdd }) {
         </div>
         <div className="segbar" role="group" aria-label="Calendar view">
           {MODES.map((m) => (
-            <button key={m.value} type="button" className={`segbar-item ${mode === m.value ? 'is-on' : ''}`} aria-pressed={mode === m.value} onClick={() => setMode(m.value)}>{m.label}</button>
+            <button key={m.value} type="button" className={`segbar-item ${mode === m.value ? 'is-on' : ''}`} aria-pressed={mode === m.value} onClick={() => { setFrom(m.value); setMode(m.value); }}>{m.label}</button>
           ))}
         </div>
       </div>
@@ -70,7 +74,7 @@ export default function TaskCalendar({ onOpen, onAdd }) {
             return (
               <button key={d} type="button" role="gridcell"
                 className={`cal-cell ${outside ? 'is-outside' : ''} ${d === today ? 'is-today' : ''}`}
-                onClick={() => { setDay(d); setMode('day'); }}
+                onClick={() => openDay(d)}
                 aria-label={`${formatLongDay(d, today)}, ${list.length} ${list.length === 1 ? 'task' : 'tasks'}`}>
                 <span className="cal-num">{Number(d.slice(8))}</span>
                 <span className="cal-items">
@@ -92,7 +96,7 @@ export default function TaskCalendar({ onOpen, onAdd }) {
             const list = byDate.get(d) || [];
             return (
               <section key={d} className={`cal-week-day ${d === today ? 'is-today' : ''}`}>
-                <button type="button" className="cal-week-h" onClick={() => { setDay(d); setMode('day'); }}>{formatLongDay(d, today)}</button>
+                <button type="button" className="cal-week-h" onClick={() => openDay(d)}>{formatLongDay(d, today)}</button>
                 {list.length ? (
                   <ul className="cal-week-list">
                     {list.map((t) => (

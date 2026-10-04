@@ -4,6 +4,7 @@ import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
 import Todo from './Todo.jsx';
 import { Icon } from './ui.jsx';
+import { useBack } from '../back.js';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
 import todoIcon from '../assets/tab-todo-list.png';
@@ -30,14 +31,17 @@ export function resetHomeSection() { try { sessionStorage.removeItem(SECTION_KEY
 export default function Home() {
   const { can, tasks } = useApp();
   const [section, setSectionRaw] = useState(readSection);
-  if (!can('meeting') && !can('todo')) return <div className="home"><Contacts /></div>;
+  const picker = can('meeting') || can('todo');
   const sections = SECTIONS.filter((s) => !s.feature || can(s.feature));
   const setSection = (v) => {
     setSectionRaw(v);
     try { if (v) sessionStorage.setItem(SECTION_KEY, v); else sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ }
   };
+  const inSection = picker && sections.some((s) => s.value === section);
+  useBack(() => setSection(null), inSection);
+  if (!picker) return <div className="home"><Contacts /></div>;
 
-  if (!sections.some((s) => s.value === section)) {
+  if (!inSection) {
     return <HomePick sections={sections} onPick={setSection} counts={{ todo: tasks.filter((t) => t.status !== 'done').length }} />;
   }
   return (
