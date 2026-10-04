@@ -325,6 +325,76 @@ select pg_temp.ok(exists (select 1 from public.interactions where id = '40000000
 delete from public.interactions where id = '40000000-0000-0000-0000-000000000001';
 select pg_temp.ok(not exists (select 1 from public.interactions where id = '40000000-0000-0000-0000-000000000001'), 'author can delete their meeting');
 
+-- ---------------------------------------------------------------- to do list
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+update public.profiles set status = 'active' where username in ('alice', 'bob', 'carol', 'dave');
+update public.workspaces set status = 'active' where id = :'ws';
+update public.workspace_members set status = 'active' where workspace_id = :'ws' and user_id in ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c');
+update public.profiles set features = '{}' where username in ('alice', 'bob', 'carol', 'dave');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok(not public.feature_on('todo'), 'to do list is off by default');
+select pg_temp.fails($$insert into public.tasks (title) values ('x')$$, 'tasks refused while to do list is off');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+select pg_temp.ok(public.feature_on('todo'), 'super admin has the to do list');
+update public.profiles set features = '{"todo": true}' where username in ('alice', 'bob');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into public.tasks (id, title, priority, due_on, due_time, reminders, created_by)
+values ('50000000-0000-0000-0000-000000000001', 'Call Peter', 'High', '2026-10-05', '10:00', '{15,0}', '00000000-0000-0000-0000-00000000000b');
+select pg_temp.ok((select created_by = auth.uid() from public.tasks where id = '50000000-0000-0000-0000-000000000001'), 'a new task is always the caller''s own');
+insert into public.tasks (id, title) values ('50000000-0000-0000-0000-000000000002', 'Private errand');
+select pg_temp.fails($$insert into public.tasks (title, due_time) values ('x', '10:00')$$, 'a time needs a date');
+select pg_temp.fails($$insert into public.tasks (title, priority) values ('x', 'Whenever')$$, 'priority must be a known one');
+select pg_temp.fails($$insert into public.tasks (title, assignee_id) values ('x', '00000000-0000-0000-0000-00000000000d')$$, 'cannot assign to someone outside the team');
+select pg_temp.fails($$insert into public.tasks (title, assignee_id) values ('x', '00000000-0000-0000-0000-00000000000c')$$, 'cannot assign to a teammate without the to do list');
+update public.tasks set status = 'done' where id = '50000000-0000-0000-0000-000000000002';
+select pg_temp.ok((select completed_at is not null from public.tasks where id = '50000000-0000-0000-0000-000000000002'), 'done stamps completed_at');
+update public.tasks set status = 'todo' where id = '50000000-0000-0000-0000-000000000002';
+select pg_temp.ok((select completed_at is null from public.tasks where id = '50000000-0000-0000-0000-000000000002'), 'reopening clears completed_at');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(not exists (select 1 from public.tasks), 'teammates cannot see each other''s tasks');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+update public.tasks set assignee_id = '00000000-0000-0000-0000-00000000000b' where id = '50000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select assignee_name = 'Bob E.' and assigned_by_name = 'Alice Admin' and assigned_at is not null from public.tasks where id = '50000000-0000-0000-0000-000000000001'), 'assigning copies both names');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok((select count(*) from public.tasks) = 1, 'assignee sees only the task given to them');
+update public.tasks set status = 'in_progress', subtasks = '[{"id":"s1","text":"Dial","done":true}]' where id = '50000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select status = 'in_progress' from public.tasks where id = '50000000-0000-0000-0000-000000000001'), 'assignee moves the status and ticks the checklist');
+select pg_temp.fails($$update public.tasks set title = 'Ignore it' where id = '50000000-0000-0000-0000-000000000001'$$, 'assignee cannot rename the task');
+select pg_temp.fails($$update public.tasks set due_on = '2027-01-01' where id = '50000000-0000-0000-0000-000000000001'$$, 'assignee cannot move the deadline');
+select pg_temp.fails($$update public.tasks set assignee_id = null where id = '50000000-0000-0000-0000-000000000001'$$, 'assignee cannot hand the task back by unassigning');
+update public.tasks set assignee_name = 'Someone' where id = '50000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select assignee_name = 'Bob E.' from public.tasks where id = '50000000-0000-0000-0000-000000000001'), 'assignee cannot change the copied names');
+delete from public.tasks where id = '50000000-0000-0000-0000-000000000001';
+select pg_temp.ok(exists (select 1 from public.tasks where id = '50000000-0000-0000-0000-000000000001'), 'assignee cannot delete the task');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into public.tasks (id, title, due_on, repeat, assignee_id)
+values ('50000000-0000-0000-0000-000000000003', 'Weekly report', '2026-10-05', '{"freq": "weekly", "interval": 1}', '00000000-0000-0000-0000-00000000000b');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+update public.tasks set due_on = '2026-10-12', done_count = done_count + 1 where id = '50000000-0000-0000-0000-000000000003';
+select pg_temp.ok((select due_on = '2026-10-12' and done_count = 1 and completed_at is not null from public.tasks where id = '50000000-0000-0000-0000-000000000003'), 'assignee can tick off a repeating task, which moves it to the next date');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+delete from public.tasks where id = '50000000-0000-0000-0000-000000000003';
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select pg_temp.ok(not exists (select 1 from public.tasks), 'outsiders see no tasks');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+select pg_temp.ok(not exists (select 1 from public.tasks), 'super admin cannot read anyone''s tasks');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+update public.workspace_members set status = 'revoked' where user_id = '00000000-0000-0000-0000-00000000000b' and workspace_id = :'ws';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select pg_temp.ok(not exists (select 1 from public.tasks), 'assignee loses the task when they leave the team');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.ok((select count(*) from public.tasks) = 2, 'owner keeps their tasks');
+delete from public.tasks where id = '50000000-0000-0000-0000-000000000002';
+select pg_temp.ok((select count(*) from public.tasks) = 1, 'owner deletes their task');
+
 -- ---------------------------------------------------------------- anon
 reset role;
 set role anon;
@@ -333,6 +403,7 @@ select pg_temp.fails($$select count(*) from public.contacts$$, 'anon cannot read
 select pg_temp.fails($$select public.ws_role('$$ || :'ws' || $$')$$, 'anon cannot call helper predicates');
 select pg_temp.fails($$select public.super_admin_workspaces()$$, 'anon cannot call dashboard RPC');
 select pg_temp.fails($$select count(*) from public.card_shares$$, 'anon cannot read shares');
+select pg_temp.fails($$select count(*) from public.tasks$$, 'anon cannot read tasks');
 select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000002')$$, 'anon cannot accept shares');
 reset role;
 \echo 'ALL RLS TESTS PASSED'

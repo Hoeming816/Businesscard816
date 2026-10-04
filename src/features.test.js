@@ -14,12 +14,17 @@ describe('featureOn', () => {
     expect(featureOn(null, 'meeting')).toBe(false);
     expect(featureOn({ features: { meeting: true } }, 'meeting')).toBe(true);
   });
+  it('keeps the To Do List off until a super admin turns it on', () => {
+    expect(featureOn({ features: {} }, 'todo')).toBe(false);
+    expect(featureOn({ features: { todo: true } }, 'todo')).toBe(true);
+    expect(featureOn({ is_super_admin: true }, 'todo')).toBe(true);
+  });
   it('gives super admins everything', () => {
     expect(featureOn({ is_super_admin: true, features: {} }, 'meeting')).toBe(true);
     expect(featureOn({ is_super_admin: true, features: { share: false } }, 'share')).toBe(true);
   });
   it('lists the keys the server enforces', () => {
-    expect(FEATURES.map((f) => f.key)).toEqual(['scan_ai', 'share', 'meeting']);
+    expect(FEATURES.map((f) => f.key)).toEqual(['scan_ai', 'share', 'meeting', 'todo']);
   });
 });
 

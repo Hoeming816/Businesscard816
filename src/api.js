@@ -534,6 +534,59 @@ export async function askMeeting(payload) {
 }
 
 // ---------------------------------------------------------------------------
+// To Do List
+// ---------------------------------------------------------------------------
+
+/** My tasks and the tasks teammates gave me (the database lets me see no others). */
+export async function listTasks() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .order('due_on', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
+  fail(error);
+  return data || [];
+}
+
+export async function insertTask(row) {
+  const { data, error } = await supabase.from('tasks').insert(row).select().single();
+  fail(error);
+  return data;
+}
+
+export async function updateTask(id, patch) {
+  const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select().single();
+  fail(error);
+  return data;
+}
+
+export async function deleteTask(id) {
+  const { error } = await supabase.from('tasks').delete().eq('id', id);
+  fail(error);
+}
+
+/**
+ * Reads a typed sentence with AI ("Remind me to call Peter tomorrow 10am") and
+ * returns the task fields: title, notes, due_on, due_time, priority, reminders,
+ * repeat, category, tags, subtasks. `clock` is { today, time } on this device.
+ */
+export async function aiTask(text, clock) {
+  const data = await invoke('todo-ai', { action: 'parse', text, ...clock });
+  return data.task;
+}
+
+/** Speech to task: transcribes a short recording, then reads it like aiTask. Returns { text, task }. */
+export async function voiceTask(blob, ext, clock) {
+  const form = new FormData();
+  form.append('action', 'voice');
+  form.append('today', clock.today);
+  form.append('time', clock.time);
+  form.append('audio', blob, `task.${ext}`);
+  const data = await invoke('todo-ai', form);
+  return { text: data.text || '', task: data.task };
+}
+
+// ---------------------------------------------------------------------------
 // Super admin
 // ---------------------------------------------------------------------------
 

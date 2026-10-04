@@ -15,6 +15,7 @@ import Me from './components/Me.jsx';
 import IncomingShare from './components/IncomingShare.jsx';
 import IncomingInvite from './components/IncomingInvite.jsx';
 import Notifications from './components/Notifications.jsx';
+import TaskReminders from './components/TaskReminders.jsx';
 import { useCurrentBack } from './back.js';
 
 const WS_KEY = 'cardfile.workspace';
@@ -30,6 +31,10 @@ export default function App() {
   const [contacts, setContacts] = useState([]);
   const [contactsState, setContactsState] = useState('idle'); // idle | loading | ready | error
   const [contactsError, setContactsError] = useState('');
+  // To Do List: my tasks and the ones given to me, shared by the list, the home tile count and reminders.
+  const [tasks, setTasks] = useState([]);
+  const [tasksState, setTasksState] = useState('idle'); // idle | loading | ready | error
+  const [tasksError, setTasksError] = useState('');
   const [view, setView] = useState('contacts');
   const back = useCurrentBack(); // the open page's Back, also offered in the bottom menu bar
   // Photo taken straight from the Scan tab button; Scan picks it up and clears it.
@@ -95,6 +100,8 @@ export default function App() {
     setMembers([]);
     setContacts([]);
     setContactsState('idle');
+    setTasks([]);
+    setTasksState('idle');
     setView('contacts');
     signedRef.current.clear();
   }, []);
@@ -181,6 +188,30 @@ export default function App() {
     else { setIncoming([]); setInvites([]); setReplies([]); }
   }, [profile?.id, loadIncoming]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const todoOn = featureOn(profile, 'todo');
+  const reloadTasks = useCallback(async () => {
+    setTasksState((s) => (s === 'ready' ? s : 'loading'));
+    try {
+      setTasks(await api.listTasks());
+      setTasksState('ready');
+      setTasksError('');
+    } catch (e) {
+      setTasksError(e.message);
+      setTasksState('error');
+    }
+  }, []);
+  useEffect(() => {
+    if (profile && todoOn) reloadTasks();
+  }, [profile?.id, todoOn, reloadTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const upsertTask = useCallback((t) => setTasks((list) => {
+    const i = list.findIndex((x) => x.id === t.id);
+    if (i === -1) return [...list, t];
+    const next = list.slice();
+    next[i] = t;
+    return next;
+  }), []);
+  const removeTask = useCallback((id) => setTasks((list) => list.filter((x) => x.id !== id)), []);
+
   // Refresh: reload the page when a newer build is live (so installed home-screen
   // apps pick it up), otherwise re-fetch this workspace's data.
   const [refreshing, setRefreshing] = useState(false);
@@ -194,12 +225,12 @@ export default function App() {
         if (latest && latest !== current) { window.location.reload(); return; }
       }
       setLater(new Set());
-      await Promise.all([reloadWorkspaces().catch(() => {}), reloadContacts(), reloadMembers(), loadIncoming()]);
+      await Promise.all([reloadWorkspaces().catch(() => {}), reloadContacts(), reloadMembers(), loadIncoming(), todoOn ? reloadTasks() : null]);
       toast('Up to date.');
     } finally {
       setRefreshing(false);
     }
-  }, [reloadWorkspaces, reloadContacts, reloadMembers, loadIncoming, toast]);
+  }, [reloadWorkspaces, reloadContacts, reloadMembers, loadIncoming, toast, todoOn, reloadTasks]);
 
   const upsertContact = useCallback((c, removedId) => {
     setContacts((list) => {
@@ -212,6 +243,7 @@ export default function App() {
     });
   }, []);
   const removeContact = useCallback((id) => setContacts((list) => list.filter((x) => x.id !== id)), []);
+
 
   const memberName = useCallback((id) => {
     if (!id) return '';
@@ -254,7 +286,8 @@ export default function App() {
     contacts, contactsState, contactsError, reloadContacts, upsertContact, removeContact,
     memberName, toast, view, setView, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion,
     quickShot, clearQuickShot, can: (key) => featureOn(profile, key),
-  }), [quickShot, clearQuickShot, user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
+    tasks, tasksState, tasksError, reloadTasks, upsertTask, removeTask,
+  }), [tasks, tasksState, tasksError, reloadTasks, upsertTask, removeTask, quickShot, clearQuickShot, user, profile, workspace, workspaces, role, members, reloadMembers, contacts, contactsState, contactsError,
     reloadContacts, upsertContact, removeContact, memberName, toast, view, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion]);
 
   // ----- render -----
@@ -439,6 +472,7 @@ export default function App() {
           }}
         />
       )}
+      {todoOn && tasksState === 'ready' && <TaskReminders />}
       <Toasts toasts={toasts} />
     </AppContext.Provider>
   );
