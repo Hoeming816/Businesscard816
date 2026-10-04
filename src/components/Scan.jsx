@@ -99,7 +99,7 @@ export default function Scan() {
     return (
       <div className="page narrow">
         <EmptyState icon="lock" title="Viewers can't add cards">
-          You have view-only access to {workspace?.name}. Ask a workspace admin to make you an editor.
+          You have view-only access here, so you can't add cards.
         </EmptyState>
       </div>
     );
