@@ -6,6 +6,7 @@ import { cardSvg, demoAudioUrl } from './cardArt.js';
 import { todayISO, addDays } from '../filters.js';
 import { canEditContact, canDeleteContact, canEditInteraction } from '../perms.js';
 import { featureOn } from '../features.js';
+import { parseQuickAdd } from '../todo.js';
 
 export const isDemo = true;
 export const isConfigured = true;
@@ -26,6 +27,7 @@ const db = {
   interactions: buildInteractions(),
   blobs: new Map(), // storage path -> object URL
   shares: [],
+  tasks: [],
 };
 // One card waiting for Alex, so the demo shows the accept prompt.
 {
@@ -558,6 +560,114 @@ export async function askMeeting({ question, minutes }) {
   await sleep(1200);
   const acts = (minutes?.action_items || []).map((a) => `• ${a.action}: ${a.assigned_to || 'not assigned'}${a.due ? `, due ${a.due}` : ''}`).join('\n');
   return `(Demo answer: the live app asks Claude.) You asked: "${question}". From this meeting's action items:\n${acts || 'none were recorded.'}`;
+}
+
+// ---------------------------------------------------------------------------
+// To Do List (rules as in migration 0011)
+// ---------------------------------------------------------------------------
+
+const teammate = (other) => db.members.some((a) => a.user_id === uid() && a.status === 'active'
+  && db.members.some((b) => b.workspace_id === a.workspace_id && b.user_id === other && b.status === 'active' && other !== uid())
+  && db.workspaces.find((w) => w.id === a.workspace_id)?.status === 'active');
+const nameOf = (id) => { const p = profile(id); return p ? (p.full_name || p.username) : ''; };
+const canSeeTask = (t) => t.created_by === uid() || (t.assignee_id === uid() && teammate(t.created_by));
+{
+  const today = todayISO();
+  const seed = [
+    { title: 'Send quotation to Harbour Logistics', priority: 'High', due_on: addDays(today, -2), tags: ['quotation'], category: 'Work', reminders: [0] },
+    { title: 'Call Peter about the CCTV order', priority: 'Urgent', due_on: today, due_time: '10:00', reminders: [15, 0], category: 'Work' },
+    { title: 'Pay office rent', due_on: today, repeat: { freq: 'monthly', interval: 1, day: Number(today.slice(8)) }, category: 'Finance', reminders: [0] },
+    { title: 'Prepare site survey checklist', status: 'in_progress', my_day_on: addDays(today, -1), category: 'Work',
+      subtasks: [{ id: 'k1', text: 'Floor plan', done: true }, { id: 'k2', text: 'Camera points', done: false }, { id: 'k3', text: 'Cable routes', done: false }] },
+    { title: 'Weekly sales report', due_on: addDays(today, 3), due_time: '17:00', repeat: { freq: 'weekly', interval: 1 }, reminders: [60, 0], category: 'Work' },
+    { title: 'Book flights for Cebu trip', due_on: addDays(today, 9), category: 'Personal', tags: ['travel'], priority: 'Low' },
+    { title: 'Follow up the switch delivery', status: 'waiting', due_on: addDays(today, 1), assignee_id: 'u-maria', category: 'Work', notes: 'Supplier promised Thursday.' },
+    { title: 'Renew car insurance', notes: 'Compare at least two quotes.', category: 'Personal' },
+    { title: 'Check stock count', status: 'done', due_on: today, completed_at: new Date(Date.now() - 3600e3).toISOString() },
+  ];
+  seed.forEach((t, i) => db.tasks.push({
+    id: `t-${i + 1}`, created_by: ME, notes: null, priority: 'Normal', status: 'todo', due_on: null, due_time: null, reminders: [], repeat: null,
+    subtasks: [], category: null, tags: [], my_day_on: null, assignee_id: null, assignee_name: null, assigned_by_name: null, assigned_at: null,
+    completed_at: null, done_count: 0, created_at: new Date(Date.now() - (20 - i) * 3600e3).toISOString(), updated_at: now(), ...t,
+    ...(t.assignee_id ? { assignee_name: nameOf(t.assignee_id), assigned_by_name: nameOf(ME), assigned_at: now() } : {}),
+  }));
+  db.tasks.push({
+    id: 't-from-maria', created_by: 'u-maria', title: 'Check the Acme proposal numbers', notes: 'Prices on page 3 look off.', priority: 'High', status: 'todo',
+    due_on: addDays(today, 2), due_time: null, reminders: [0], repeat: null, subtasks: [], category: 'Work', tags: ['acme'], my_day_on: null,
+    assignee_id: ME, assignee_name: nameOf(ME), assigned_by_name: nameOf('u-maria'), assigned_at: now(), completed_at: null, done_count: 0,
+    created_at: now(), updated_at: now(),
+  });
+}
+
+function taskRules(t, prev) {
+  if (!String(t.title || '').trim()) deny('A task needs a title.');
+  if (t.due_time && !t.due_on) deny('A time needs a date.');
+  if (t.repeat && !t.due_on) deny('A repeating task needs a date.');
+  if (!prev || t.assignee_id !== prev.assignee_id) {
+    if (t.assignee_id) {
+      if (!teammate(t.assignee_id)) deny('You can only give tasks to people in your team.');
+      if (!featureOn(profile(t.assignee_id), 'todo')) deny('They do not have the To Do List yet. Ask your super admin to turn it on for them.');
+      Object.assign(t, { assignee_name: nameOf(t.assignee_id), assigned_by_name: nameOf(t.created_by), assigned_at: now() });
+    } else Object.assign(t, { assignee_name: null, assigned_by_name: null, assigned_at: null });
+  }
+  if (!prev) t.completed_at = t.status === 'done' ? now() : null;
+  else if ((t.done_count || 0) > (prev.done_count || 0) || (t.status === 'done' && prev.status !== 'done')) t.completed_at = now();
+  else if (t.status !== 'done' && prev.status === 'done') t.completed_at = null;
+}
+
+export async function listTasks() {
+  await tick();
+  return clone(db.tasks.filter(canSeeTask));
+}
+export async function insertTask(row) {
+  await tick();
+  needFeature('todo', 'To Do List');
+  const t = {
+    id: newId('t'), notes: null, priority: 'Normal', status: 'todo', due_on: null, due_time: null, reminders: [], repeat: null, subtasks: [],
+    category: null, tags: [], my_day_on: null, assignee_id: null, done_count: 0, created_at: now(), ...clone(row), created_by: uid(), updated_at: now(),
+  };
+  taskRules(t, null);
+  db.tasks.push(t);
+  return clone(t);
+}
+export async function updateTask(id, patch) {
+  await tick();
+  const t = db.tasks.find((x) => x.id === id && canSeeTask(x));
+  if (!t) deny('That task is no longer there.');
+  const next = { ...t, ...clone(patch), id: t.id, created_by: t.created_by, updated_at: now() };
+  if (t.created_by !== uid()) {
+    const locked = ['title', 'notes', 'priority', 'reminders', 'repeat', 'category', 'tags', 'my_day_on', 'assignee_id'];
+    if (!t.repeat) locked.push('due_on', 'due_time');
+    if (locked.some((k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(t[k]))) {
+      deny('Only the person who gave you this task can change it. You can update its status and checklist.');
+    }
+  }
+  taskRules(next, t);
+  Object.assign(t, next);
+  return clone(t);
+}
+export async function deleteTask(id) {
+  await tick();
+  const i = db.tasks.findIndex((x) => x.id === id && x.created_by === uid());
+  if (i === -1) deny('Only the person who made a task can delete it.');
+  db.tasks.splice(i, 1);
+}
+const demoClock = (clock) => {
+  const [y, m, d] = String(clock?.today || todayISO()).split('-').map(Number);
+  const [hh, mm] = String(clock?.time || '09:00').split(':').map(Number);
+  return new Date(y, m - 1, d, hh, mm);
+};
+export async function aiTask(text, clock) {
+  needFeature('todo', 'To Do List');
+  await sleep(700);
+  const { found: _found, ...task } = parseQuickAdd(text, demoClock(clock));
+  return { ...task, notes: '', subtasks: [] };
+}
+export async function voiceTask(_blob, _ext, clock) {
+  needFeature('todo', 'To Do List');
+  await sleep(1200);
+  const text = 'Remind me to send the quotation to Acme on Friday at 3pm, high priority';
+  return { text, task: await aiTask(text, clock) };
 }
 
 function requireSuper() {
