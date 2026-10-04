@@ -3,6 +3,7 @@ import { useApp } from '../context.js';
 import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
 import { Icon } from './ui.jsx';
+import { useBack } from '../back.js';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
 import todoIcon from '../assets/tab-todo-list.png';
@@ -29,13 +30,15 @@ export function resetHomeSection() { try { sessionStorage.removeItem(SECTION_KEY
 export default function Home() {
   const { can } = useApp();
   const [section, setSectionRaw] = useState(readSection);
-  if (!can('meeting')) return <div className="home"><Contacts /></div>;
   const setSection = (v) => {
     setSectionRaw(v);
     try { if (v) sessionStorage.setItem(SECTION_KEY, v); else sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ }
   };
+  const inSection = can('meeting') && SECTIONS.some((s) => s.value === section);
+  useBack(() => setSection(null), inSection);
+  if (!can('meeting')) return <div className="home"><Contacts /></div>;
 
-  if (!SECTIONS.some((s) => s.value === section)) return <HomePick onPick={setSection} />;
+  if (!inSection) return <HomePick onPick={setSection} />;
   return (
     <div className="home">
       <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>

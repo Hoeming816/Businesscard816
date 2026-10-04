@@ -1073,6 +1073,21 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .minutes-list > li.is-open .minutes-row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .minutes-open { background: var(--surface); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; padding: 12px; display: grid; gap: 8px; justify-items: start; min-width: 0; }
 .minutes-open .entries { width: 100%; margin: 0; }
+/* One meeting opened on its own page, with Back to the list (Home's Back is hidden there). */
+.home:has(.minutes-single) > .home-back { display: none; }
+.minutes-single { display: grid; gap: 12px; min-width: 0; }
+.minutes-back { justify-self: start; }
+.minutes-single-head { display: grid; gap: 4px; min-width: 0; }
+.minutes-single-head .h1 { overflow-wrap: anywhere; }
+.minutes-single-head .minutes-row-who { margin: 0; }
+.minutes-single .minutes-open { border-top: 1px solid var(--line); border-radius: 12px; }
+.meeting-filters { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
+.meeting-filters input { width: auto; min-height: 38px; }
+@media (max-width: 720px) {
+  .meeting-filters .select-inline { flex: 1 1 140px; }
+  .meeting-filters .select-inline select { width: 100%; }
+  .meeting-filters input { flex: 1 1 100%; }
+}
 .minutes-list > li { position: relative; }
 .minutes-row-tags { padding-right: 40px; }
 .minutes-del { position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; justify-content: flex-end; pointer-events: none; }

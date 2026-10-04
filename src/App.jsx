@@ -15,6 +15,7 @@ import Me from './components/Me.jsx';
 import IncomingShare from './components/IncomingShare.jsx';
 import IncomingInvite from './components/IncomingInvite.jsx';
 import Notifications from './components/Notifications.jsx';
+import { useCurrentBack } from './back.js';
 
 const WS_KEY = 'cardfile.workspace';
 const SIGN_REFRESH_MS = 50 * 60 * 1000; // signed URLs live 1 h; refresh after 50 min
@@ -30,6 +31,7 @@ export default function App() {
   const [contactsState, setContactsState] = useState('idle'); // idle | loading | ready | error
   const [contactsError, setContactsError] = useState('');
   const [view, setView] = useState('contacts');
+  const back = useCurrentBack(); // the open page's Back, also offered in the bottom menu bar
   // Photo taken straight from the Scan tab button; Scan picks it up and clears it.
   const [quickShot, setQuickShot] = useState(null);
   const clearQuickShot = useCallback(() => setQuickShot(null), []);
@@ -365,6 +367,7 @@ export default function App() {
         <main id="main" className="main" tabIndex={-1}>{main}</main>
 
         <nav className="tabbar" aria-label="Main">
+          {back && <TabbarItem icon="chevronLeft" label="Back" onClick={() => { back.run(); window.scrollTo(0, 0); }} />}
           <TabbarItem icon="cards" label="Home" active={view === 'contacts'} onClick={() => go('contacts')} />
           {isSuper && <TabbarItem icon="users" label="Team" active={view === 'team'} onClick={() => go('team')} />}
           <button

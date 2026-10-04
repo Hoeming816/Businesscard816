@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
-import { allActions, hasMinutes, isMinutes, minutesColumns, normaliseMinutes } from '../minutes.js';
+import { allActions, hasMinutes, isMinutes, minutesColumns, normaliseMinutes, onDate } from '../minutes.js';
 import { MEETING_TYPES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
 import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
+import { useBack } from '../back.js';
 import MeetingView, { MinutesLanguage } from './MeetingView.jsx';
 import { Icon, EmptyState, Spinner, ConfirmButton, Pill, formatDate, formatDuration } from './ui.jsx';
 
@@ -30,6 +31,10 @@ export default function Minutes() {
   const [expanded, setExpanded] = useState(null); // entry id
   const [recording, setRecording] = useState(false);
   const [view, setView] = useState('meetings'); // meetings | followups
+  const [type, setType] = useState(''); // meeting type, '' for all
+  const [dateBy, setDateBy] = useState('any'); // any | month | day
+  const [month, setMonth] = useState(() => todayISO().slice(0, 7));
+  const [day, setDay] = useState(todayISO);
 
   const load = useCallback(async () => {
     try {
@@ -48,16 +53,83 @@ export default function Minutes() {
     return (items || []).filter((i) => {
       if (show === 'minutes' && !hasMinutes(i)) return false;
       if (show === 'recordings' && !i.audio_path) return false;
+      if (type && i.meeting_type !== type) return false;
+      if (!onDate(i.occurred_on, dateBy, dateBy === 'month' ? month : day)) return false;
       if (!needle) return true;
       const c = byId.get(i.contact_id);
       return [i.title, i.kind, i.meeting_type, i.notes, i.summary, i.transcript, i.minutes && JSON.stringify(i.minutes), c?.full_name, c?.company]
         .some((v) => String(v || '').toLowerCase().includes(needle));
     });
-  }, [items, show, q, byId]);
+  }, [items, show, q, byId, type, dateBy, month, day]);
 
   const contact = open ? byId.get(open) : null;
   const openCount = useMemo(() => allActions(items, todayISO()).filter((a) => a.status !== 'Done').length, [items]);
   const { making, stage, makeMinutes, share, removeRecording, remove } = useEntryActions({ reload: load, contactFor: (i) => byId.get(i.contact_id) || null });
+  const openMeeting = (id) => { setExpanded(id); window.scrollTo(0, 0); };
+
+  // One meeting opened from the list: show it on its own, with Back to the list.
+  const current = expanded && items ? items.find((i) => i.id === expanded) : null;
+  useBack(() => setExpanded(null), !!current);
+  if (current) {
+    const i = current;
+    const c = byId.get(i.contact_id);
+    return (
+      <section className="minutes-page minutes-single" aria-labelledby="minutes-title">
+        <button type="button" className="btn btn-ghost btn-sm minutes-back" onClick={() => setExpanded(null)}>
+          <Icon name="chevronLeft" size={16} /> Back
+        </button>
+        <div className="minutes-single-head">
+          <h1 id="minutes-title" className="h1">{i.title || i.kind}</h1>
+          <p className="minutes-row-who small">
+            <time className="mono" dateTime={i.occurred_on}>{formatDate(i.occurred_on)}</time>
+            {' · '}{i.contact_id ? [c?.full_name, c?.company].filter(Boolean).join(' · ') || 'Contact not found' : 'No contact linked'}
+          </p>
+        </div>
+        {i.meeting_type && (
+          <div className="minutes-open">
+            <MeetingView
+              i={i}
+              contact={c}
+              canEdit={canEditInteraction(i, c, role, uid)}
+              canMakeMinutes={can('meeting')}
+              making={making === i.id}
+              stage={stage}
+              busy={making !== null}
+              onMakeMinutes={() => makeMinutes(i)}
+              onDelete={() => { setExpanded(null); remove(i); }}
+              onDeleteRecording={() => removeRecording(i)}
+              onChanged={load}
+            />
+          </div>
+        )}
+        {!i.meeting_type && (
+          <div className="minutes-open">
+            <ol className="entries">
+              <Entry
+                i={i}
+                author="You"
+                canEdit={canEditInteraction(i, c, role, uid)}
+                canMakeMinutes={can('meeting')}
+                onEdit={c ? () => setOpen(c.id) : null}
+                onDelete={() => { setExpanded(null); remove(i); }}
+                onDeleteRecording={() => removeRecording(i)}
+                making={making === i.id}
+                busy={making !== null}
+                onMakeMinutes={() => makeMinutes(i)}
+                onShare={() => share(i)}
+              />
+            </ol>
+            {c && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(c.id)}>
+                <Icon name="cards" size={14} /> Open {c.full_name || 'contact'}
+              </button>
+            )}
+          </div>
+        )}
+        {contact && <ContactDetail contact={contact} initialTab="notes" onClose={() => { setOpen(null); load(); }} />}
+      </section>
+    );
+  }
 
   return (
     <section className="minutes-page" aria-labelledby="minutes-title">
@@ -86,7 +158,7 @@ export default function Minutes() {
             onSaved={async (saved) => {
               setRecording(false); setShow('all'); setQ('');
               await load();
-              setExpanded(saved.id);
+              openMeeting(saved.id);
               if (saved.meeting_type) makeMinutes(saved); // straight on to transcript and minutes
             }}
           />
@@ -101,11 +173,30 @@ export default function Minutes() {
               <button key={s.value} type="button" className={`chip ${show === s.value ? 'is-on' : ''}`} aria-pressed={show === s.value} onClick={() => setShow(s.value)}>{s.label}</button>
             ))}
           </div>
+          <div className="meeting-filters">
+            <label className="select-inline">
+              <span>Type</span>
+              <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Meeting type">
+                <option value="">All types</option>
+                {MEETING_TYPES.map((t) => <option key={t.value} value={t.value}>{t.value}</option>)}
+              </select>
+            </label>
+            <label className="select-inline">
+              <span>Date</span>
+              <select value={dateBy} onChange={(e) => setDateBy(e.target.value)} aria-label="Filter by date">
+                <option value="any">Any date</option>
+                <option value="month">Month</option>
+                <option value="day">Day</option>
+              </select>
+            </label>
+            {dateBy === 'month' && <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />}
+            {dateBy === 'day' && <input type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Day" />}
+          </div>
         </div>}
       </div>
 
       {view === 'followups' && items && (
-        <FollowUps items={items} byId={byId} onChanged={load} onOpen={(id) => { setView('meetings'); setShow('all'); setQ(''); setExpanded(id); }} />
+        <FollowUps items={items} byId={byId} onChanged={load} onOpen={(id) => { setView('meetings'); setShow('all'); setQ(''); openMeeting(id); }} />
       )}
 
       {view === 'meetings' && <>
@@ -113,7 +204,7 @@ export default function Minutes() {
       {error && <p className="notice notice-error" role="alert">{error}</p>}
       {items && !rows.length && !error && (
         <EmptyState icon="history" title={items.length ? 'Nothing matches' : 'No meeting minutes yet'}>
-          {items.length ? 'Try another search or show All.' : can('meeting') ? 'Tap New Recording to record one. Notes you add to a contact appear here too.' : 'Notes and meetings you add to a contact appear here.'}
+          {items.length ? 'Try another search, type or date, or show All.' : can('meeting') ? 'Tap New Recording to record one. Notes you add to a contact appear here too.' : 'Notes and meetings you add to a contact appear here.'}
         </EmptyState>
       )}
 
@@ -122,16 +213,15 @@ export default function Minutes() {
           {rows.map((i) => {
             const c = byId.get(i.contact_id);
             const text = i.summary || i.notes || i.transcript || '';
-            const isOpen = expanded === i.id;
             return (
-              <li key={i.id} className={isOpen ? 'is-open' : ''}>
-                <button type="button" className="minutes-row" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : i.id)}>
+              <li key={i.id}>
+                <button type="button" className="minutes-row" onClick={() => openMeeting(i.id)}>
                   <span className="minutes-row-head">
                     <strong>{i.title || i.kind}</strong>
                     <time className="mono small" dateTime={i.occurred_on}>{formatDate(i.occurred_on)}</time>
                   </span>
                   <span className="minutes-row-who small">{i.contact_id ? [c?.full_name, c?.company].filter(Boolean).join(' · ') || 'Contact not found' : 'No contact linked'}</span>
-                  {text && !isOpen && <span className="minutes-row-text small">{text}</span>}
+                  {text && <span className="minutes-row-text small">{text}</span>}
                   <span className="minutes-row-tags small">
                     {i.meeting_type && <span className="minutes-tag minutes-tag-type">{i.meeting_type}</span>}
                     {hasMinutes(i) && <span className="minutes-tag"><Icon name="sparkles" size={12} /> AI minutes</span>}
@@ -140,7 +230,7 @@ export default function Minutes() {
                     {!isMinutes(i) && !i.meeting_type && <span className="minutes-tag">{i.kind}</span>}
                   </span>
                 </button>
-                {!isOpen && canEditInteraction(i, c, role, uid) && (
+                {canEditInteraction(i, c, role, uid) && (
                   <span className="minutes-del">
                     <ConfirmButton
                       className="icon-btn"
@@ -152,47 +242,6 @@ export default function Minutes() {
                       <span className="sr-only">Delete {i.title || i.kind}</span>
                     </ConfirmButton>
                   </span>
-                )}
-                {isOpen && i.meeting_type && (
-                  <div className="minutes-open">
-                    <MeetingView
-                      i={i}
-                      contact={c}
-                      canEdit={canEditInteraction(i, c, role, uid)}
-                      canMakeMinutes={can('meeting')}
-                      making={making === i.id}
-                      stage={stage}
-                      busy={making !== null}
-                      onMakeMinutes={() => makeMinutes(i)}
-                      onDelete={() => { setExpanded(null); remove(i); }}
-                      onDeleteRecording={() => removeRecording(i)}
-                      onChanged={load}
-                    />
-                  </div>
-                )}
-                {isOpen && !i.meeting_type && (
-                  <div className="minutes-open">
-                    <ol className="entries">
-                      <Entry
-                        i={i}
-                        author="You"
-                        canEdit={canEditInteraction(i, c, role, uid)}
-                        canMakeMinutes={can('meeting')}
-                        onEdit={c ? () => setOpen(c.id) : null}
-                        onDelete={() => { setExpanded(null); remove(i); }}
-                        onDeleteRecording={() => removeRecording(i)}
-                        making={making === i.id}
-                        busy={making !== null}
-                        onMakeMinutes={() => makeMinutes(i)}
-                        onShare={() => share(i)}
-                      />
-                    </ol>
-                    {c && (
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(c.id)}>
-                        <Icon name="cards" size={14} /> Open {c.full_name || 'contact'}
-                      </button>
-                    )}
-                  </div>
                 )}
               </li>
             );
