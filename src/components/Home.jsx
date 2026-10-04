@@ -5,10 +5,14 @@ import Minutes from './Minutes.jsx';
 import { Icon } from './ui.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
+import todoIcon from '../assets/tab-todo-list.png';
+import noteIcon from '../assets/tab-quick-note.png';
 
 const SECTIONS = [
   { value: 'cards', label: 'Business Cards', img: cardsIcon },
   { value: 'minutes', label: 'Meeting', img: meetingIcon },
+  { value: 'todo', label: 'To Do List', img: todoIcon },
+  { value: 'notes', label: 'Quick Note', img: noteIcon },
 ];
 
 // Which section is open, kept for this browser tab so Scan, Team or a refresh
@@ -37,7 +41,7 @@ export default function Home() {
       <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>
         <Icon name="chevronLeft" size={16} /> Back
       </button>
-      {section === 'cards' ? <Contacts /> : <Minutes />}
+      {section === 'cards' ? <Contacts /> : section === 'minutes' ? <Minutes /> : <ComingSoon section={SECTIONS.find((s) => s.value === section)} />}
     </div>
   );
 }
@@ -56,14 +60,18 @@ function HomePick({ onPick }) {
             <span>{s.label}</span>
           </button>
         ))}
-        {/* Two more sections are planned; their names aren't decided yet. */}
-        {[1, 2].map((n) => (
-          <div key={n} className="home-tile home-tile-soon" aria-label="Coming soon">
-            <span className="home-tile-soon-icon"><Icon name="plus" size={40} /></span>
-            <span>Coming soon</span>
-          </div>
-        ))}
       </div>
+    </div>
+  );
+}
+
+/** To Do List and Quick Note aren't built yet; their tiles open this. */
+function ComingSoon({ section }) {
+  return (
+    <div className="empty">
+      <img src={section.img} alt="" width="96" height="96" />
+      <h3>{section.label}</h3>
+      <p>Coming soon.</p>
     </div>
   );
 }
