@@ -991,7 +991,8 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 }
 
 /* ---------------------------------------------------------------- sharing */
-.share-panel { margin-top: 16px; padding: 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface); }
+.share-panel { margin-top: 16px; padding: 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface); scroll-margin: 16px; }
+.share-panel:focus { outline: none; }
 .share-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .share-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; }
 .share-panel > p { margin: 6px 0 10px; }

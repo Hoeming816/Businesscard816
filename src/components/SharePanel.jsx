@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { Icon, Pill, Spinner, Avatar } from './ui.jsx';
 
@@ -19,6 +19,13 @@ export default function SharePanel({ contact, onClose }) {
     try { setShares(await api.listContactShares(contact.id)); } catch (e) { setShares([]); toast(e.message, 'error'); }
   };
   useEffect(() => { load(); }, [contact.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The panel opens under the buttons, often below the fold: bring it into view.
+  const box = useRef(null);
+  useEffect(() => {
+    box.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    box.current?.focus({ preventScroll: true });
+  }, []);
 
   // Only people who can keep cards: active editors and admins, not yourself.
   const people = members.filter((m) => m.user_id !== uid && m.status === 'active' && m.profile_status === 'active'
@@ -43,7 +50,7 @@ export default function SharePanel({ contact, onClose }) {
   };
 
   return (
-    <section className="share-panel" aria-labelledby="share-title">
+    <section ref={box} tabIndex={-1} className="share-panel" aria-labelledby="share-title">
       <div className="share-head">
         <h3 id="share-title"><Icon name="send" size={16} /> Share this card</h3>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close sharing"><Icon name="x" size={18} /></button>
@@ -53,7 +60,10 @@ export default function SharePanel({ contact, onClose }) {
         Your notes and meetings stay with you.
       </p>
       {shares === null ? <Spinner /> : people.length === 0 ? (
-        <p className="muted small">No one else here can receive cards yet. Editors and admins of this workspace can.</p>
+        <p className="notice">
+          There's no one to share with yet. Cards go to other members of this workspace who are editors or admins.
+          Add them on the <strong>Team</strong> page first.
+        </p>
       ) : (
         <ul className="share-list">
           {people.map((m) => {
