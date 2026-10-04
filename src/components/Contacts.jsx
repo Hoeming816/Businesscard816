@@ -189,9 +189,11 @@ function ContactRow({ c, today, uid, thumb, face, onOpen }) {
   const sub = [c.job_title, c.company].filter(Boolean).join(' · ');
   return (
     <button type="button" className="row" onClick={onOpen}>
-      <span className="thumb" aria-hidden="true">
-        {thumb ? <img src={thumb} alt="" loading="lazy" /> : <span className="thumb-ph">{initials(c.full_name || c.company)}</span>}
+      <span className="thumb-col" aria-hidden="true">
         {face && <img className="thumb-face" src={face} alt="" loading="lazy" />}
+        <span className="thumb">
+          {thumb ? <img src={thumb} alt="" loading="lazy" /> : <span className="thumb-ph">{initials(c.full_name || c.company)}</span>}
+        </span>
       </span>
       <span className="row-main">
         <span className="row-name">{c.full_name || <em className="muted">No name</em>}</span>
