@@ -25,7 +25,7 @@ export default function IncomingInvite({ invite, remaining, onDone, onLater }) {
   return (
     <Modal title="You're invited to a team" onClose={busy ? () => {} : onLater} className="incoming-share">
       <p className="incoming-lead">
-        <strong>{who}</strong> wants to add you to their team as {/^[aeiou]/.test(invite.role) ? 'an' : 'a'} {invite.role}. Will you join?
+        <strong>{who}</strong> wants to add you to their team. Will you join?
       </p>
       <div className="incoming-card">
         <span className="incoming-icon" aria-hidden="true"><Icon name="users" size={20} /></span>
