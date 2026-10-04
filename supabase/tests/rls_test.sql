@@ -54,7 +54,7 @@ select pg_temp.ok((select private_account from public.profiles where id = auth.u
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
 update public.profiles set private_account = false where id = '00000000-0000-0000-0000-00000000000d';
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
-select pg_temp.fails($$select public.add_member('$$ || :'ws' || $$', 'dave', 'viewer')$$, 'private user cannot be invited, and others cannot switch it off');
+select pg_temp.fails($$select public.add_member('$$ || :'ws' || $$', 'dave', 'viewer')$$, 'private user cannot be found or invited, and others cannot switch it off');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
 update public.profiles set private_account = false where id = auth.uid();
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);

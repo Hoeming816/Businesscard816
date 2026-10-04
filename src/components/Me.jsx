@@ -151,7 +151,7 @@ export default function Me() {
             <strong>Stay private</strong>{' '}
             {savingPrivate ? <span className="muted small">Saving…</span>
               : <span className={`small ${profile.private_account ? 'feature-on' : 'feature-off'}`}>{profile.private_account ? 'On' : 'Off'}</span>}
-            <span className="help block">When this is on, nobody can add you to their team or send you an invitation. People can still share cards with you in teams you're already in.</span>
+            <span className="help block">When this is on, nobody can find you by your username, so nobody can add you to their team or send you an invitation. People can still share cards with you in teams you're already in.</span>
           </span>
         </label>
       </section>

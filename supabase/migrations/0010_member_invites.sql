@@ -48,16 +48,18 @@ begin
   if p_role not in ('admin', 'editor', 'viewer') then
     raise exception 'invalid role %', p_role;
   end if;
-  select id into target from profiles where username = lower(trim(p_username)) and status = 'active';
+  -- A private account can't be found: it looks exactly like an unknown username,
+  -- unless they are already an active member here (then only the role changes).
+  select p.id into target from profiles p
+   where p.username = lower(trim(p_username)) and p.status = 'active'
+     and (not p.private_account
+          or exists (select 1 from workspace_members m
+                      where m.workspace_id = p_workspace and m.user_id = p.id and m.status = 'active'));
   if target is null then
     raise exception 'no account with username "%" — they need to sign up first', p_username;
   end if;
   if target = (select owner_id from workspaces where id = p_workspace) then
     raise exception 'that person owns this workspace';
-  end if;
-  if (select private_account from profiles where id = target)
-     and not exists (select 1 from workspace_members where workspace_id = p_workspace and user_id = target and status = 'active') then
-    raise exception 'This person isn''t accepting invitations.';
   end if;
 
   insert into workspace_members (workspace_id, user_id, role, status, added_by)
