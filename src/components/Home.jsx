@@ -6,13 +6,13 @@ import { Icon } from './ui.jsx';
 import cardsIcon from '../assets/tab-business-cards.png';
 import meetingIcon from '../assets/tab-meeting.png';
 import todoIcon from '../assets/tab-todo-list.png';
-import noteIcon from '../assets/tab-quick-note.png';
+import noteIcon from '../assets/tab-quick-notes.png';
 
 const SECTIONS = [
   { value: 'cards', label: 'Business Cards', img: cardsIcon },
   { value: 'minutes', label: 'Meeting', img: meetingIcon },
   { value: 'todo', label: 'To Do List', img: todoIcon },
-  { value: 'notes', label: 'Quick Note', img: noteIcon },
+  { value: 'notes', label: 'Quick Notes', img: noteIcon },
 ];
 
 // Which section is open, kept for this browser tab so Scan, Team or a refresh
@@ -65,7 +65,7 @@ function HomePick({ onPick }) {
   );
 }
 
-/** To Do List and Quick Note aren't built yet; their tiles open this. */
+/** To Do List and Quick Notes aren't built yet; their tiles open this. */
 function ComingSoon({ section }) {
   return (
     <div className="empty">
