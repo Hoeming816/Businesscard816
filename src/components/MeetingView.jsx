@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { ACTION_PRIORITIES, ACTION_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
-import { clock, decisionLabel, dueState, lineTime, meetingTimes, minutesColumns, normaliseMinutes } from '../minutes.js';
+import { clock, decisionLabel, dueState, lineTime, meetingTimes, minutesColumns, minutesDoc, minutesFileName, minutesMailto, normaliseMinutes } from '../minutes.js';
+import { DOCX_TYPE, docxBytes } from '../docx.js';
 import { Icon, Spinner, ConfirmButton, Pill, SaveLabel, Tabs, useJustSaved, formatDate, formatDuration } from './ui.jsx';
 
 const TABS = [
@@ -55,6 +56,35 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
     }
   };
 
+  // Phones: the share sheet sends the Word file to Mail, Outlook, Gmail… already attached.
+  // Computers: a web page can't attach files to an email, so the file is downloaded and
+  // the email app opens with the subject and message filled in, ready for it.
+  const emailMinutes = async () => {
+    const mi = { ...i, minutes: m };
+    const name = minutesFileName(i, formatDate);
+    const blob = new Blob([docxBytes(minutesDoc(mi, contact, formatDate))], { type: DOCX_TYPE });
+    const file = typeof File === 'function' ? new File([blob], name, { type: DOCX_TYPE }) : null;
+    const touch = window.matchMedia?.('(pointer: coarse)').matches;
+    if (touch && file && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: name.replace(/\.docx$/, '') });
+        return;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    window.location.href = minutesMailto(mi, contact, formatDate, name);
+    toast(`Downloaded "${name}". Attach it to the email that opened.`);
+  };
+
   if (editing) {
     return <MinutesEditor i={i} minutes={m} onCancel={() => setEditing(false)} onSaved={async () => { setEditing(false); await onChanged(); }} />;
   }
@@ -99,6 +129,7 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
       </div>
 
       <div className="meeting-tools">
+        {m && <button type="button" className="btn btn-primary btn-sm" onClick={emailMinutes}><Icon name="mail" size={14} /> Email</button>}
         {m && <button type="button" className="btn btn-outline btn-sm" onClick={onShare}><Icon name="send" size={14} /> Share minutes</button>}
         {m && canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} /> Edit minutes</button>}
         {m && canEdit && canMakeMinutes && (

@@ -229,3 +229,64 @@ export function outstanding(i, earlier, followUp = []) {
       return { ...rest, state, note: f?.note || '' };
     });
 }
+
+/** The formal minutes as Word document blocks (see docx.js), in the same order as minutesText. */
+export function minutesDoc(i, contact, formatDate = (d) => d) {
+  const m = i.minutes || normaliseMinutes();
+  const t = meetingTimes(i);
+  const out = [{ t: 'title', text: 'Meeting Minutes' }];
+  const field = (label, value) => { if (value) out.push({ t: 'field', label, value }); };
+  field('Meeting', i.title || i.meeting_type || 'Meeting');
+  field('Type', i.meeting_type);
+  field('Date', formatDate(i.occurred_on));
+  field('Time', t && `${clock(t.start)}–${clock(t.end)}`);
+  field('Location', m.location);
+  field('Chairperson', m.chairperson);
+  field('Attendees', m.attendees.join(', '));
+  field('Contact', [contact?.full_name, contact?.company].filter(Boolean).join(', '));
+  const section = (title, blocks) => { if (blocks.length) out.push({ t: 'h', text: title }, ...blocks); };
+  const bullets = (xs) => xs.map((text) => ({ t: 'bullet', text }));
+  section('Quick Summary', bullets(m.quick_summary));
+  section('Agenda', m.agenda.map((a, k) => ({ t: 'p', text: `${k + 1}. ${a}` })));
+  section('Discussion', m.discussion.flatMap((d, k) => [{ t: 'p', text: `${k + 1}. ${d.topic}`, bold: true }, ...bullets(d.points)]));
+  section('Decisions Made', m.decisions.map((d, k) => ({ t: 'field', label: decisionLabel(k), value: d })));
+  if (m.action_items.length) {
+    section('Action Items', [{
+      t: 'table',
+      head: ['Action', 'Assigned to', 'Due', 'Priority', 'Status'],
+      rows: m.action_items.map((a) => [a.action, a.assigned_to || '', a.due ? formatDate(a.due) : '', a.priority || '', a.status || 'Open']),
+    }]);
+  }
+  section('Outstanding from Previous Meetings', m.follow_up.map((f) => ({
+    t: 'bullet',
+    text: `${[f.action, f.assigned_to, f.state].filter(Boolean).join(' — ')}${f.note ? ` (${f.note})` : ''}`,
+  })));
+  section('Issues / Risks', bullets(m.issues));
+  section('Next Steps', bullets(m.next_steps));
+  if (m.next_meeting) section('Next Meeting', [{ t: 'p', text: /^\d{4}-\d{2}-\d{2}$/.test(m.next_meeting) ? formatDate(m.next_meeting) : m.next_meeting }]);
+  return out;
+}
+
+/** "Minutes - Weekly sync - 4 Oct 2026.docx", safe as a file name. */
+export function minutesFileName(i, formatDate = (d) => d) {
+  const name = ['Minutes', i.title || i.meeting_type || 'Meeting', formatDate(i.occurred_on)].filter(Boolean).join(' - ');
+  return `${name.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}.docx`;
+}
+
+/** A mailto: link with the subject and a short body; the minutes go as the attached Word file. */
+export function minutesMailto(i, contact, formatDate = (d) => d, fileName = '') {
+  const m = i.minutes || normaliseMinutes();
+  const title = i.title || i.meeting_type || 'Meeting';
+  const subject = `Minutes: ${title} (${formatDate(i.occurred_on)})`;
+  const lines = ['Hi,', '', `Please find attached the minutes of ${title} on ${formatDate(i.occurred_on)}${fileName ? ` (${fileName})` : ''}.`];
+  if (m.quick_summary.length) {
+    lines.push('', 'Quick summary:');
+    let used = 0;
+    for (const b of m.quick_summary) {
+      if (used + b.length > 900) { lines.push('• …'); break; }
+      lines.push(`• ${b}`); used += b.length;
+    }
+  }
+  lines.push('', 'Regards');
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`;
+}
