@@ -61,6 +61,8 @@ export function fromDraft(d) {
 export function draftFromScan(card, base = blankDraft()) {
   const d = { ...base };
   for (const f of TEXT_FIELDS) {
+    // The contact type is the user's call (one tap on "Prospect"), never a guess from the card.
+    if (f === 'contact_type') continue;
     if (f in card && card[f] != null && String(card[f]).trim()) d[f] = String(card[f]).trim();
   }
   if (Array.isArray(card.emails) && card.emails.length) d.emails = card.emails.filter(Boolean);
