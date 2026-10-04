@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { ACTION_PRIORITIES, ACTION_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
-import { clock, decisionLabel, dueState, lineTime, meetingTimes, minutesColumns, normaliseMinutes } from '../minutes.js';
+import { clock, decisionLabel, dueState, lineTime, meetingTimes, minutesColumns, minutesDoc, minutesFileName, normaliseMinutes } from '../minutes.js';
+import { DOCX_TYPE, docxBytes } from '../docx.js';
 import { Icon, Spinner, ConfirmButton, Pill, SaveLabel, Tabs, useJustSaved, formatDate, formatDuration } from './ui.jsx';
 
 const TABS = [
@@ -28,7 +29,7 @@ const DUE_PILL = { overdue: ['danger', 'Overdue'], soon: ['warn', 'Due soon'], d
  * A typed meeting: its recording and the six AI outputs (summary, formal
  * minutes, action items, decisions, timed transcript, Ask AI), with edit and share.
  */
-export default function MeetingView({ i, contact, canEdit, canMakeMinutes, making, stage, busy, onMakeMinutes, onShare, onDelete, onDeleteRecording, onChanged }) {
+export default function MeetingView({ i, contact, canEdit, canMakeMinutes, making, stage, busy, onMakeMinutes, onDelete, onDeleteRecording, onChanged }) {
   const { api, toast, ensureSigned, signed } = useApp();
   const [tab, setTab] = useState('mt-summary');
   const [editing, setEditing] = useState(false);
@@ -53,6 +54,31 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
     } catch (e) {
       toast(e.message, 'error');
     }
+  };
+
+  // Shares the minutes as a Word file through the device's share sheet (WhatsApp, Viber,
+  // Outlook, Mail…). Where the browser can't share files, the file is downloaded instead.
+  const shareMinutes = async () => {
+    const name = minutesFileName(i, formatDate);
+    const blob = new Blob([docxBytes(minutesDoc({ ...i, minutes: m }, contact, formatDate))], { type: DOCX_TYPE });
+    const file = typeof File === 'function' ? new File([blob], name, { type: DOCX_TYPE }) : null;
+    if (file && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: name.replace(/\.docx$/, '') });
+        return;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast(`Downloaded "${name}". Sharing files isn't available in this browser, so attach it in your email or chat app.`);
   };
 
   if (editing) {
@@ -99,7 +125,7 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
       </div>
 
       <div className="meeting-tools">
-        {m && <button type="button" className="btn btn-outline btn-sm" onClick={onShare}><Icon name="send" size={14} /> Share minutes</button>}
+        {m && <button type="button" className="btn btn-primary btn-sm" onClick={shareMinutes}><Icon name="send" size={14} /> Share</button>}
         {m && canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} /> Edit minutes</button>}
         {m && canEdit && canMakeMinutes && (
           <ConfirmButton className="btn btn-ghost btn-sm" icon="refresh" confirmLabel="Write again" message="Write the minutes again? Your edits are replaced." onConfirm={onMakeMinutes} disabled={busy}>
