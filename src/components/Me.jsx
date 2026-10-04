@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { workspaceLabel } from '../workspaceLabel.js';
 import { useApp } from '../context.js';
 import { Icon, Avatar, Pill, SaveLabel, useJustSaved } from './ui.jsx';
 
@@ -115,7 +116,7 @@ export default function Me() {
           {(workspaces || []).map((w) => (
             <li key={w.id}>
               <Icon name="building" size={16} />
-              <span className="grow">{w.name}</span>
+              <span className="grow">{workspaceLabel(w, profile.id)}</span>
               <span className="muted small">{w.owner_id === profile.id ? 'owner · ' : ''}{w.role}</span>
               {w.id === workspace?.id ? (
                 <Pill tone="ok">Current</Pill>
