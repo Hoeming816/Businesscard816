@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../context.js';
 import Contacts from './Contacts.jsx';
 import Minutes from './Minutes.jsx';
@@ -31,27 +31,32 @@ export default function Home() {
     try { if (v) sessionStorage.setItem(SECTION_KEY, v); else sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ }
   };
 
-  if (!SECTIONS.some((s) => s.value === section)) {
-    return (
-      <div className="home home-pick">
-        <h1 className="sr-only">Choose where to go</h1>
-        <div className="home-tiles">
-          {SECTIONS.map((s) => (
-            <button key={s.value} type="button" className="home-tile" onClick={() => setSection(s.value)}>
-              <img src={s.img} alt="" />
-              <span>{s.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (!SECTIONS.some((s) => s.value === section)) return <HomePick onPick={setSection} />;
   return (
     <div className="home">
       <button type="button" className="btn btn-ghost btn-sm home-back" onClick={() => setSection(null)}>
         <Icon name="chevronLeft" size={16} /> Back
       </button>
       {section === 'cards' ? <Contacts /> : <Minutes />}
+    </div>
+  );
+}
+
+/** The selection page, centred in the screen. */
+function HomePick({ onPick }) {
+  // Signing in can leave the page scrolled (the phone keyboard); start at the top.
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+  return (
+    <div className="home home-pick">
+      <h1 className="sr-only">Choose where to go</h1>
+      <div className="home-tiles">
+        {SECTIONS.map((s) => (
+          <button key={s.value} type="button" className="home-tile" onClick={() => onPick(s.value)}>
+            <img src={s.img} alt="" />
+            <span>{s.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
