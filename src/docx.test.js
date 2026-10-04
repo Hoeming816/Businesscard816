@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { crc32, docxBytes, documentXml } from './docx.js';
-import { minutesDoc, minutesFileName, minutesMailto, normaliseMinutes } from './minutes.js';
+import { minutesDoc, minutesFileName, normaliseMinutes } from './minutes.js';
 
 // Reads a stored (uncompressed) zip back into { name: text }.
 function unzip(bytes) {
@@ -63,11 +63,7 @@ describe('minutes as a Word file', () => {
     expect(blocks).toContainEqual({ t: 'field', label: 'Decision 01', value: 'Go with vendor A' });
   });
 
-  it('names the file safely and fills the email', () => {
+  it('names the file safely', () => {
     expect(minutesFileName({ ...i, title: 'Q3: plan/review?' })).toBe('Minutes - Q3 plan review - 2026-10-04.docx');
-    const url = minutesMailto(i, null, (d) => d, 'x.docx');
-    expect(url.startsWith('mailto:?subject=')).toBe(true);
-    expect(decodeURIComponent(url)).toContain('Minutes: Weekly sync (2026-10-04)');
-    expect(decodeURIComponent(url)).toContain('• Budget approved');
   });
 });

@@ -272,21 +272,3 @@ export function minutesFileName(i, formatDate = (d) => d) {
   const name = ['Minutes', i.title || i.meeting_type || 'Meeting', formatDate(i.occurred_on)].filter(Boolean).join(' - ');
   return `${name.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}.docx`;
 }
-
-/** A mailto: link with the subject and a short body; the minutes go as the attached Word file. */
-export function minutesMailto(i, contact, formatDate = (d) => d, fileName = '') {
-  const m = i.minutes || normaliseMinutes();
-  const title = i.title || i.meeting_type || 'Meeting';
-  const subject = `Minutes: ${title} (${formatDate(i.occurred_on)})`;
-  const lines = ['Hi,', '', `Please find attached the minutes of ${title} on ${formatDate(i.occurred_on)}${fileName ? ` (${fileName})` : ''}.`];
-  if (m.quick_summary.length) {
-    lines.push('', 'Quick summary:');
-    let used = 0;
-    for (const b of m.quick_summary) {
-      if (used + b.length > 900) { lines.push('• …'); break; }
-      lines.push(`• ${b}`); used += b.length;
-    }
-  }
-  lines.push('', 'Regards');
-  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`;
-}
