@@ -40,10 +40,10 @@ export default function Contacts() {
   // Sign thumbnails for the first 300 results, in batches.
   const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   useEffect(() => {
-    ensureSigned('cards', ordered.slice(0, SIGN_FIRST).map((c) => c.front_path));
+    ensureSigned('cards', ordered.slice(0, SIGN_FIRST).flatMap((c) => [c.front_path, c.face_path]));
   }, [ordered, ensureSigned]);
   useEffect(() => {
-    if (limit > SIGN_FIRST) ensureSigned('cards', ordered.slice(0, limit).map((c) => c.front_path));
+    if (limit > SIGN_FIRST) ensureSigned('cards', ordered.slice(0, limit).flatMap((c) => [c.front_path, c.face_path]));
   }, [limit, ordered, ensureSigned]);
 
   // Close the drawer with Escape.
@@ -161,7 +161,7 @@ export default function Contacts() {
               <ul className="rows">
                 {g.items.map((c) => (
                   <li key={c.id}>
-                    <ContactRow c={c} today={today} uid={uid} thumb={signed('cards', c.front_path)} onOpen={() => setOpenId(c.id)} />
+                    <ContactRow c={c} today={today} uid={uid} thumb={signed('cards', c.front_path)} face={c.face_path ? signed('cards', c.face_path) : null} onOpen={() => setOpenId(c.id)} />
                   </li>
                 ))}
               </ul>
@@ -182,7 +182,7 @@ export default function Contacts() {
   );
 }
 
-function ContactRow({ c, today, uid, thumb, onOpen }) {
+function ContactRow({ c, today, uid, thumb, face, onOpen }) {
   const fu = followUpState(c, today);
   const phone = (c.phones || []).find((p) => p && p.number);
   const email = (c.emails || [])[0];
@@ -191,6 +191,7 @@ function ContactRow({ c, today, uid, thumb, onOpen }) {
     <button type="button" className="row" onClick={onOpen}>
       <span className="thumb" aria-hidden="true">
         {thumb ? <img src={thumb} alt="" loading="lazy" /> : <span className="thumb-ph">{initials(c.full_name || c.company)}</span>}
+        {face && <img className="thumb-face" src={face} alt="" loading="lazy" />}
       </span>
       <span className="row-main">
         <span className="row-name">{c.full_name || <em className="muted">No name</em>}</span>

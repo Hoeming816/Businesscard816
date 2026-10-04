@@ -916,6 +916,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
   .group-tab { margin-left: 10px; font-size: 14px; }
   .row { grid-template-columns: 72px minmax(0, 1fr) 16px; gap: 12px; padding: 12px; }
   .thumb { width: 72px; }
+  .thumb-face { width: 34px; height: 34px; right: -6px; bottom: -6px; }
   .row-contact { grid-column: 2 / 3; grid-row: 2; font-size: 12px; margin-top: -4px; }
   .row-email { display: none; }
   .row-chev { grid-column: 3; grid-row: 1 / span 2; }
@@ -1145,3 +1146,30 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
 .followups { display: grid; gap: 12px; }
 .fu-from { justify-self: start; }
 .view-switch { margin-top: 8px; }
+
+/* Face photo on a business card contact */
+.thumb { position: relative; overflow: visible; }
+.thumb > img:not(.thumb-face) { border-radius: 6px; }
+.thumb-face {
+  position: absolute; right: -8px; bottom: -8px; width: 40px; height: 40px; border-radius: 50%;
+  object-fit: cover; border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(16, 24, 40, .25); background: var(--surface-3);
+}
+.face-row { display: flex; align-items: center; gap: 14px; }
+.face-avatar {
+  flex: none; width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: var(--surface-3); border: 1px solid var(--line); font: 700 22px var(--font-head); color: var(--ink-3);
+}
+.face-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.face-side { display: grid; gap: 4px; min-width: 0; }
+.face-side .detail-name { margin: 0; }
+.face-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.face-actions .link { display: inline-flex; align-items: center; gap: 4px; }
+.face-remove { color: var(--danger); }
+.face-cropper .face-view {
+  position: relative; width: min(100%, 360px); aspect-ratio: 1; margin: 8px auto; border-radius: 12px; overflow: hidden;
+  touch-action: none; cursor: grab; background: #000;
+}
+.face-cropper .face-view canvas { width: 100%; height: 100%; display: block; }
+.face-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, .45); pointer-events: none; outline: 2px solid rgba(255, 255, 255, .85); }
+.face-zoom { display: flex; align-items: center; gap: 10px; width: min(100%, 360px); margin: 0 auto 8px; }
+.face-zoom input { flex: 1; }

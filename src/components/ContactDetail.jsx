@@ -7,7 +7,8 @@ import ContactForm from './ContactForm.jsx';
 import Timeline from './Timeline.jsx';
 import SharePanel from './SharePanel.jsx';
 import CardCropper from './CardCropper.jsx';
-import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
+import FaceCropper from './FaceCropper.jsx';
+import { cropSquare, cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
 import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, SaveLabel, useJustSaved, formatDate, initials } from './ui.jsx';
 
 export default function ContactDetail({ contact, onClose, initialTab = 'details' }) {
@@ -24,6 +25,9 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
   const retakeSide = useRef('front');
   const [retake, setRetake] = useState(null);
   const [retakeBusy, setRetakeBusy] = useState(''); // '' | 'loading' | 'saving'
+  const faceInput = useRef(null);
+  const [face, setFace] = useState(null); // { canvas } while framing a new face photo
+  const [faceBusy, setFaceBusy] = useState(false);
   const [photoNote, setPhotoNote] = useState(''); // confirmation shown under the photo after a retake
 
   const editable = canEditContact(contact, role, uid);
@@ -38,13 +42,14 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
   }, [contact]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    ensureSigned('cards', [contact.front_path, contact.back_path]);
-  }, [contact.front_path, contact.back_path, ensureSigned]);
+    ensureSigned('cards', [contact.front_path, contact.back_path, contact.face_path]);
+  }, [contact.front_path, contact.back_path, contact.face_path, ensureSigned]);
 
   const today = todayISO();
   const fu = followUpState(contact, today);
   const photoPath = side === 'back' ? contact.back_path : contact.front_path;
   const photo = photoPath ? signed('cards', photoPath) : null;
+  const faceUrl = contact.face_path ? signed('cards', contact.face_path) : null;
   const titleId = `detail-title-${contact.id}`;
 
   const refresh = async () => {
@@ -144,6 +149,43 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
     }
   };
 
+  const startFace = async (file) => {
+    setFaceBusy(true);
+    try {
+      setFace({ canvas: await loadPhoto(file) });
+    } catch (e) {
+      toast(e.message || 'Could not use that image.', 'error');
+    } finally {
+      setFaceBusy(false);
+    }
+  };
+
+  // The face photo is saved on its own, like a card photo retake.
+  const saveFace = async (crop) => {
+    setFaceBusy(true);
+    try {
+      const img = await cropSquare(face.canvas, crop);
+      const old = contact.face_path;
+      const path = await api.uploadCardPhoto(contact.workspace_id, contact.id, 'face', img.blob);
+      const updated = await api.updateContact(contact.id, { face_path: path });
+      if (img.url) URL.revokeObjectURL(img.url);
+      if (old) api.removeStorageObjects('cards', [old]).catch(() => {});
+      if (updated) upsertContact(updated);
+      setFace(null);
+      toast(old ? 'Saved. New face photo' : 'Saved. Face photo added');
+    } catch (e) {
+      toast(e.message || 'Could not save the face photo.', 'error');
+    } finally {
+      setFaceBusy(false);
+    }
+  };
+
+  const removeFace = async () => {
+    const old = contact.face_path;
+    const updated = await patch({ face_path: null }, 'Face photo removed');
+    if (updated && old) api.removeStorageObjects('cards', [old]).catch(() => {});
+  };
+
   const close = () => {
     if (dirty && !window.confirm('Discard unsaved changes to this contact?')) return;
     onClose();
@@ -212,6 +254,7 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
               />
             </div>
           )}
+          {face && <FaceCropper canvas={face.canvas} busy={faceBusy} onSave={saveFace} onCancel={() => setFace(null)} />}
           {retake && (
             <CardCropper
               side={retake.side === 'back' ? 'Back' : 'Front'}
@@ -226,7 +269,40 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
           )}
 
           <div className="facts">
-            <h2 id={titleId} className="detail-name">{contact.full_name || <em className="muted">No name</em>}</h2>
+            <div className="face-row">
+              <span className="face-avatar" aria-hidden={!faceUrl}>
+                {faceUrl ? <img src={faceUrl} alt={`Face photo of ${contact.full_name || 'this contact'}`} />
+                  : <span>{contact.face_path ? '' : initials(contact.full_name || contact.company)}</span>}
+              </span>
+              <div className="face-side">
+                <h2 id={titleId} className="detail-name">{contact.full_name || <em className="muted">No name</em>}</h2>
+                {editable && (
+                  <div className="face-actions">
+                    <button type="button" className="link small" disabled={faceBusy} onClick={() => faceInput.current?.click()}>
+                      {faceBusy && !face ? <Spinner /> : <Icon name="user" size={13} />} {contact.face_path ? 'Change face photo' : 'Add face photo'}
+                    </button>
+                    {contact.face_path && (
+                      <ConfirmButton className="link small face-remove" confirmLabel="Remove" message="Remove the face photo?" onConfirm={removeFace} disabled={busy}>
+                        Remove
+                      </ConfirmButton>
+                    )}
+                    <input
+                      ref={faceInput}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      onChange={(e) => {
+                        const f = e.target.files && e.target.files[0];
+                        e.target.value = '';
+                        if (f) startFace(f);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
             {(contact.job_title || contact.company) && (
               <p className="detail-sub">
                 {contact.job_title}{contact.job_title && contact.company ? ' · ' : ''}<strong>{contact.company}</strong>
