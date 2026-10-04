@@ -34,8 +34,9 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000b', 'bob@u',   '{"username":"bob","full_name":"Bob Editor"}'),
   ('00000000-0000-0000-0000-00000000000c', 'carol@u', '{"username":"carol","full_name":"Carol Viewer"}'),
   ('00000000-0000-0000-0000-00000000000d', 'dave@u',  '{"username":"dave","full_name":"Dave Outsider"}'),
-  ('00000000-0000-0000-0000-00000000000e', 'sam@u',   '{"username":"sam","full_name":"Sam Super"}');
-update public.profiles set is_super_admin = true where username = 'sam';
+  ('00000000-0000-0000-0000-00000000000e', 'hoeming816@u', '{"username":"hoeming816","full_name":"Sam Super"}');
+update public.profiles set is_super_admin = true where username = 'hoeming816';
+select pg_temp.fails($$update public.profiles set is_super_admin = true where username = 'alice'$$, 'only hoeming816 can ever be super admin, even from the SQL editor');
 update public.profiles set features = '{"meeting": true}' where not is_super_admin; -- meeting is off by default (tested below)
 
 select pg_temp.ok((select count(*) from public.profiles) = 5, 'profiles created by trigger');

@@ -7,6 +7,30 @@ alter table public.workspace_members drop constraint if exists workspace_members
 alter table public.workspace_members add constraint workspace_members_status_check
   check (status in ('active', 'revoked', 'invited'));
 
+-- hoeming816 is the one and only super admin. Nobody else can be given it,
+-- by the app or from the SQL editor.
+do $$
+declare others text;
+begin
+  select string_agg(username, ', ') into others from public.profiles where is_super_admin and username <> 'hoeming816';
+  if others is not null then
+    raise exception 'These accounts are super admins and must be demoted first: %', others;
+  end if;
+end $$;
+create or replace function public.guard_single_super_admin()
+returns trigger language plpgsql as $$
+begin
+  if new.is_super_admin and new.username <> 'hoeming816' then
+    raise exception 'Only hoeming816 can be the super admin.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists profiles_single_super_admin on public.profiles;
+create trigger profiles_single_super_admin
+  before insert or update of is_super_admin, username on public.profiles
+  for each row execute function public.guard_single_super_admin();
+
 -- "Stay private": nobody can add or invite this person. Their own switch.
 alter table public.profiles add column if not exists private_account boolean not null default false;
 
