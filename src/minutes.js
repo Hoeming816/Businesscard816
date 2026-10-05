@@ -2,6 +2,8 @@
 // Note, and the plain text that goes out through the phone's share sheet.
 
 import { load, save } from './storage.js';
+import { audioParts } from './recordingParts.js';
+export { PART_SEC, audioParts, joinAudioParts } from './recordingParts.js';
 
 export const MINUTES_PREFIX = 'Minutes: ';
 
@@ -67,9 +69,10 @@ export async function shareOrCopy(title, text, nav = globalThis.navigator) {
   return 'copied';
 }
 
-/** When a recording was made: from its file name (…-<ms>.ext), else when the entry was created. */
+/** When a recording was made: from its (last part's) file name (…-<ms>.ext), else when the entry was created. */
 export function recordedAt(i) {
-  const m = /-(\d{13})\.\w+$/.exec(i.audio_path || '');
+  const parts = audioParts(i);
+  const m = /-(\d{13})\.\w+$/.exec(parts[parts.length - 1] || '');
   const d = m ? new Date(Number(m[1])) : new Date(i.created_at);
   return Number.isNaN(d.getTime()) ? null : d;
 }

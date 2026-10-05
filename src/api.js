@@ -4,6 +4,7 @@
 // user-presentable message.
 
 import { supabase, USERNAME_DOMAIN, configured, setKeepSignedIn as keepSignedIn } from './supabase.js';
+import { audioParts } from './recordingParts.js';
 
 export const isDemo = false;
 export const isConfigured = configured;
@@ -273,7 +274,7 @@ export async function deleteContact(contact) {
   for (const p of await listFolder('cards', prefix)) cardPaths.add(p);
 
   const { data: ints } = await supabase.from('interactions').select('audio_path').eq('contact_id', contact.id);
-  const recPaths = new Set((ints || []).map((i) => i.audio_path).filter(Boolean));
+  const recPaths = new Set((ints || []).flatMap((i) => audioParts(i)));
   for (const p of await listFolder('recordings', prefix)) recPaths.add(p);
 
   if (cardPaths.size) {
@@ -462,15 +463,16 @@ export async function updateInteraction(id, patch) {
 
 export async function deleteInteraction(interaction) {
   if (interaction.audio_path) {
-    const { error } = await supabase.storage.from('recordings').remove([interaction.audio_path]);
+    const { error } = await supabase.storage.from('recordings').remove(audioParts(interaction));
     fail(error, 'Could not delete the recording');
   }
   const { error } = await supabase.from('interactions').delete().eq('id', interaction.id);
   fail(error);
 }
 
-export async function uploadRecording(workspaceId, contactId, interactionId, blob, ext) {
-  const path = `${workspaceId}/${contactId}/${interactionId}-${Date.now()}.${ext}`; // the time in the name is when it was recorded
+export async function uploadRecording(workspaceId, contactId, interactionId, blob, ext, part = 0) {
+  // The time in the name is when it was recorded; a long recording's later parts add -p2, -p3…
+  const path = `${workspaceId}/${contactId}/${interactionId}${part ? `-p${part + 1}` : ''}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from('recordings').upload(path, blob, {
     contentType: blob.type || (ext === 'mp4' ? 'audio/mp4' : 'audio/webm'),
     upsert: true,

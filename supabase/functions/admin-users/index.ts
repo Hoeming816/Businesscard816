@@ -113,7 +113,8 @@ async function deleteAccount(admin: Admin, userId: string, keeperId: string) {
   const addContacts = (rows: { front_path: string | null; back_path: string | null }[] | null) =>
     (rows ?? []).forEach((c) => { if (c.front_path) cardFiles.add(c.front_path); if (c.back_path) cardFiles.add(c.back_path); });
   const addAudio = (rows: { audio_path: string | null }[] | null) =>
-    (rows ?? []).forEach((i) => { if (i.audio_path) audioFiles.add(i.audio_path); });
+    // A long recording is saved in parts: audio_path lists them, one per line.
+    (rows ?? []).forEach((i) => String(i.audio_path ?? "").split("\n").map((p) => p.trim()).filter(Boolean).forEach((p) => audioFiles.add(p)));
 
   addContacts((await admin.from("contacts").select("front_path, back_path").eq("created_by", userId)).data);
   addAudio((await admin.from("interactions").select("audio_path").eq("created_by", userId).not("audio_path", "is", null)).data);

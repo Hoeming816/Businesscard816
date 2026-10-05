@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { ACTION_PRIORITIES, ACTION_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
-import { MINUTES_LANGUAGES, clock, decisionLabel, dueState, languageShort, lineTime, meetingTimes, minutesColumns, minutesDoc, minutesFileName, minutesLanguage, normaliseMinutes, setMinutesLanguage } from '../minutes.js';
+import { MINUTES_LANGUAGES, audioParts, clock, decisionLabel, dueState, languageShort, lineTime, meetingTimes, minutesColumns, minutesDoc, minutesFileName, minutesLanguage, normaliseMinutes, setMinutesLanguage } from '../minutes.js';
 import { DOCX_TYPE, docxBytes } from '../docx.js';
+import RecordingAudio from './RecordingAudio.jsx';
 import { Icon, Spinner, ConfirmButton, Pill, SaveLabel, Tabs, useJustSaved, formatDate, formatDuration } from './ui.jsx';
 
 const TABS = [
@@ -30,21 +31,15 @@ const DUE_PILL = { overdue: ['danger', 'Overdue'], soon: ['warn', 'Due soon'], d
  * minutes, action items, decisions, timed transcript, Ask AI), with edit and share.
  */
 export default function MeetingView({ i, contact, canEdit, canMakeMinutes, making, stage, busy, onMakeMinutes, onDelete, onDeleteRecording, onChanged }) {
-  const { api, toast, ensureSigned, signed } = useApp();
+  const { api, toast } = useApp();
   const [tab, setTab] = useState('mt-summary');
   const [editing, setEditing] = useState(false);
   const audioRef = useRef(null);
-  useEffect(() => { if (i.audio_path) ensureSigned('recordings', [i.audio_path]); }, [i.audio_path, ensureSigned]);
-  const audio = i.audio_path ? signed('recordings', i.audio_path) : null;
+  const parts = audioParts(i);
   const m = i.minutes ? normaliseMinutes(i.minutes) : null;
   const t = meetingTimes(i);
 
-  const jump = (sec) => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.currentTime = sec;
-    a.play().catch(() => {});
-  };
+  const jump = (sec) => audioRef.current?.seek(sec);
 
   const setStatus = async (k, status) => {
     const next = { ...m, action_items: m.action_items.map((a, j) => (j === k ? { ...a, status } : a)) };
@@ -98,7 +93,7 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
 
       {i.audio_path && (
         <div className="meeting-audio">
-          {audio ? <audio ref={audioRef} controls preload="metadata" src={audio} aria-label={`Recording, ${formatDuration(i.duration_sec)}`} /> : <span className="muted small">Loading recording…</span>}
+          <RecordingAudio ref={audioRef} paths={parts} duration={i.duration_sec} />
         </div>
       )}
 
@@ -123,7 +118,7 @@ export default function MeetingView({ i, contact, canEdit, canMakeMinutes, makin
           </>
         ) : <NotYet m={m} />)}
         {tab === 'mt-decisions' && (m ? <Decisions items={m.decisions} /> : <NotYet m={m} />)}
-        {tab === 'mt-transcript' && <Transcript i={i} onJump={audio ? jump : null} />}
+        {tab === 'mt-transcript' && <Transcript i={i} onJump={parts.length ? jump : null} />}
         {tab === 'mt-ask' && <AskAI i={i} m={m} contact={contact} />}
       </div>
 

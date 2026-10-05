@@ -8,6 +8,7 @@ import { canEditContact, canDeleteContact, canEditInteraction } from '../perms.j
 import { featureOn } from '../features.js';
 import { parseQuickAdd } from '../todo.js';
 import { looksActionable } from '../notes.js';
+import { audioParts } from '../recordingParts.js';
 
 export const isDemo = true;
 export const isConfigured = true;
@@ -457,13 +458,14 @@ export async function deleteInteraction(interaction) {
   const i = db.interactions.find((x) => x.id === interaction.id);
   const c = db.contacts.find((x) => x.id === i?.contact_id);
   if (!i || !canEditInteraction(i, c, c && roleIn(c.workspace_id), uid())) deny();
-  if (i.audio_path) db.blobs.delete(i.audio_path);
+  for (const p of audioParts(i)) db.blobs.delete(p);
   db.interactions = db.interactions.filter((x) => x.id !== i.id);
 }
-export async function uploadRecording(ws, contactId, interactionId, blob, ext) {
+export async function uploadRecording(ws, contactId, interactionId, blob, ext, part = 0) {
   needFeature('meeting', 'Meeting');
   await sleep(250);
-  const path = `${ws}/${contactId}/${interactionId}-${Date.now()}.${ext}`; // the time in the name is when it was recorded
+  // The time in the name is when it was recorded; a long recording's later parts add -p2, -p3…
+  const path = `${ws}/${contactId}/${interactionId}${part ? `-p${part + 1}` : ''}-${Date.now()}.${ext}`;
   db.blobs.set(path, URL.createObjectURL(blob));
   return path;
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
-import { allActions, hasMinutes, isMinutes, minutesColumns, normaliseMinutes, onDate } from '../minutes.js';
+import { allActions, hasMinutes, isMinutes, joinAudioParts, minutesColumns, normaliseMinutes, onDate } from '../minutes.js';
 import { MEETING_TYPES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
@@ -265,6 +265,7 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
   const [contactId, setContactId] = useState('');
   const [last, setLast] = useState(null); // the recording, kept to retry a failed save
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState(''); // "Saving part 2 of 5…"
   const [err, setErr] = useState('');
   const mine = useMemo(() => contacts.filter((c) => c.created_by === uid)
     .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')), [contacts, uid]);
@@ -272,6 +273,7 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
   const save = async (r) => {
     setSaving(true);
     setErr('');
+    setProgress('');
     try {
       const c = mine.find((x) => x.id === contactId) || null;
       let saved = r.saved || await api.insertInteraction({
@@ -284,8 +286,15 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
         workspace_id: c ? c.workspace_id : workspace.id,
       });
       r.saved = saved;
-      const path = await api.uploadRecording(saved.workspace_id, c ? c.id : `m-${uid}`, saved.id, r.blob, r.ext);
-      saved = await api.updateInteraction(saved.id, { audio_path: path, duration_sec: r.duration });
+      // A long recording is several parts; each is its own file. Parts already uploaded
+      // are kept when saving is tried again.
+      r.paths = r.paths || [];
+      for (let k = 0; k < r.parts.length; k++) {
+        if (r.paths[k]) continue;
+        if (r.parts.length > 1) setProgress(`Saving part ${k + 1} of ${r.parts.length}…`);
+        r.paths[k] = await api.uploadRecording(saved.workspace_id, c ? c.id : `m-${uid}`, saved.id, r.parts[k].blob, r.ext, k);
+      }
+      saved = await api.updateInteraction(saved.id, { audio_path: joinAudioParts(r.paths), duration_sec: r.duration });
       toast('Saved. Now writing the minutes.');
       await onSaved(saved);
     } catch (e) {
@@ -341,9 +350,9 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
         <span className="label">Recording</span>
         {last ? (
           <div className="rec-done">
-            <audio controls src={last.url} aria-label="New recording" />
-            <span className="mono small">{formatDuration(last.duration)}</span>
-            {saving ? <span className="small muted"><Spinner /> Saving recording…</span>
+            <audio controls src={last.parts[0].url} aria-label={last.parts.length > 1 ? `New recording, part 1 of ${last.parts.length}` : 'New recording'} />
+            <span className="mono small">{formatDuration(last.duration)}{last.parts.length > 1 && ` · ${last.parts.length} parts`}</span>
+            {saving ? <span className="small muted"><Spinner /> {progress || 'Saving recording…'}</span>
               : <button type="button" className="btn btn-outline btn-sm" onClick={() => save(last)}>Try saving again</button>}
           </div>
         ) : (
