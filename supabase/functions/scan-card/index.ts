@@ -1,5 +1,6 @@
 // scan-card: reads the front (and optional back) of a business card with
 // Claude vision and returns the contact fields for the user to review.
+// With { multi: true } it reads every card in one photo and returns { cards }.
 import { HttpError, json, requireCaller, requireFeature, serve } from "../_shared/http.ts";
 import { structuredReply } from "../_shared/claude.ts";
 import {
@@ -41,6 +42,42 @@ const CARD_SCHEMA = {
   },
 };
 
+// Several cards in one photo: each card plus where it sits in the photo
+// (fractions of the photo's width and height) so the app can crop its picture.
+const MAX_CARDS = 12;
+const num = { type: "number" };
+const MULTI_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["cards"],
+  properties: {
+    cards: {
+      type: "array",
+      items: {
+        ...CARD_SCHEMA,
+        required: [...CARD_SCHEMA.required, "box"],
+        properties: {
+          ...CARD_SCHEMA.properties,
+          box: {
+            type: "object",
+            additionalProperties: false,
+            required: ["left", "top", "width", "height"],
+            properties: { left: num, top: num, width: num, height: num },
+          },
+        },
+      },
+    },
+  },
+};
+
+const MULTI_NOTE = `This photo may show several business cards laid out together. Treat every card as a separate contact: return one entry in "cards" per card, in reading order (top to bottom, then left to right), up to ${MAX_CARDS}. Never mix details from two cards. If a card shows its back (logo only, no contact details), skip it.
+
+For each card, "box" is where the whole card sits in the photo, as fractions of the photo's width and height from its top-left corner (0 to 1): left, top, width, height. Make the box cover the entire card.
+
+card_text: for each card, only that card's text.`;
+
+const clamp01 = (v: unknown) => Math.min(1, Math.max(0, Number(v) || 0));
+
 const list = (values: string[]) => values.map((v) => `"${v}"`).join(", ");
 
 const SYSTEM = `You read photographs of business cards and extract the contact's details for a sales team's contact database.
@@ -80,10 +117,49 @@ function checkImage(b64: unknown, side: string): string {
   return data;
 }
 
+// deno-lint-ignore no-explicit-any
+function tidy(raw: Record<string, any>) {
+  return {
+    ...raw,
+    emails: (raw.emails ?? []).map((e: string) => e.trim().toLowerCase()).filter(Boolean),
+    phones: (raw.phones ?? []).filter((p: { number?: string }) => p.number?.trim()),
+    contact_type: normalise(raw.contact_type, CONTACT_TYPES),
+    industry: normalise(raw.industry, INDUSTRIES),
+    business_category: normalise(raw.business_category, BUSINESS_CATEGORIES),
+    job_function: normalise(raw.job_function, JOB_FUNCTIONS),
+    seniority: normalise(raw.seniority, SENIORITIES),
+    opportunities: [...new Set((raw.opportunities ?? []).map((o: string) => normalise(o, OPPORTUNITIES)))]
+      .filter((o) => OPPORTUNITIES.includes(o as string)),
+    tags: [...new Set((raw.tags ?? []).map((t: string) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 5),
+  };
+}
+
 serve(async (req) => {
   requireFeature(await requireCaller(req), "scan_ai", "AI card reading");
   const body = await req.json().catch(() => ({}));
   const mediaType = MEDIA_TYPES.includes(body.media_type) ? body.media_type : "image/jpeg";
+
+  if (body.multi) {
+    // deno-lint-ignore no-explicit-any
+    const raw = await structuredReply<{ cards: Record<string, any>[] }>({
+      system: `${SYSTEM}\n\n${MULTI_NOTE}`,
+      content: [
+        { type: "image", source: { type: "base64", media_type: mediaType, data: checkImage(body.front, "cards") } },
+        { type: "text", text: "Extract every business card in this photo as a separate contact." },
+        // deno-lint-ignore no-explicit-any
+      ] as any,
+      schema: MULTI_SCHEMA,
+      maxTokens: 32000,
+    });
+    const cards = (raw.cards ?? []).slice(0, MAX_CARDS).map(({ box, ...card }) => {
+      const left = clamp01(box?.left), top = clamp01(box?.top);
+      return {
+        ...tidy(card),
+        box: { left, top, width: Math.min(1 - left, clamp01(box?.width)), height: Math.min(1 - top, clamp01(box?.height)) },
+      };
+    });
+    return json({ cards });
+  }
 
   const content: Record<string, unknown>[] = [
     { type: "text", text: "Front of the card:" },
@@ -105,18 +181,5 @@ serve(async (req) => {
     schema: CARD_SCHEMA,
   });
 
-  const card = {
-    ...raw,
-    emails: (raw.emails ?? []).map((e: string) => e.trim().toLowerCase()).filter(Boolean),
-    phones: (raw.phones ?? []).filter((p: { number?: string }) => p.number?.trim()),
-    contact_type: normalise(raw.contact_type, CONTACT_TYPES),
-    industry: normalise(raw.industry, INDUSTRIES),
-    business_category: normalise(raw.business_category, BUSINESS_CATEGORIES),
-    job_function: normalise(raw.job_function, JOB_FUNCTIONS),
-    seniority: normalise(raw.seniority, SENIORITIES),
-    opportunities: [...new Set((raw.opportunities ?? []).map((o: string) => normalise(o, OPPORTUNITIES)))]
-      .filter((o) => OPPORTUNITIES.includes(o as string)),
-    tags: [...new Set((raw.tags ?? []).map((t: string) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 5),
-  };
-  return json({ card });
+  return json({ card: tidy(raw) });
 });

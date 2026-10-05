@@ -329,6 +329,13 @@ export async function scanCard(front, back) {
   return data.card;
 }
 
+/** AI reading of a photo with several cards: [{ ...card, box: { left, top, width, height } }]. */
+export async function scanCards(photo) {
+  const data = await invoke('scan-card', { front: photo, multi: true, media_type: 'image/jpeg' });
+  if (!data || !Array.isArray(data.cards)) throw new Error('The card reader returned no result.');
+  return data.cards;
+}
+
 // ---------------------------------------------------------------------------
 // Sharing a card with another member
 // ---------------------------------------------------------------------------
