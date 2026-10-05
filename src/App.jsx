@@ -432,7 +432,7 @@ export default function App() {
             aria-label="Scan a card with the camera"
           >
             <span className="tabbar-scan-btn"><Icon name="scan" size={24} strokeWidth={2} /></span>
-            <span className="tabbar-label">Scan</span>
+            <span className="tabbar-label">Scan card</span>
           </button>
           {isSuper && <TabbarItem icon="shield" label="Admin" active={view === 'admin'} onClick={() => go('admin')} />}
           <TabbarItem icon="user" label="Account" active={view === 'me'} onClick={() => go('me')} />
