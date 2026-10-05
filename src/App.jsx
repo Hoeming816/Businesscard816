@@ -69,12 +69,22 @@ export default function App() {
   useEffect(() => {
     const typing = (el) => el?.matches?.('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file]):not([type=range])');
     let t;
-    const onIn = (e) => { if (typing(e.target)) { clearTimeout(t); document.body.classList.add('typing'); } };
+    let watch;
+    const stillTyping = () => { const el = document.activeElement; return typing(el) && el.isConnected; };
+    const stop = () => { clearInterval(watch); watch = null; document.body.classList.remove('typing'); };
+    const onIn = (e) => {
+      if (!typing(e.target)) return;
+      clearTimeout(t);
+      document.body.classList.add('typing');
+      // iOS Safari sends no focusout when a focused field is removed (the sign-in
+      // form after Sign in), which left the menu bar hidden. Check while typing.
+      if (!watch) watch = setInterval(() => { if (!stillTyping()) stop(); }, 400);
+    };
     // Moving from one field to the next fires focusout then focusin; wait a beat.
-    const onOut = () => { clearTimeout(t); t = setTimeout(() => { if (!typing(document.activeElement)) document.body.classList.remove('typing'); }, 120); };
+    const onOut = () => { clearTimeout(t); t = setTimeout(() => { if (!stillTyping()) stop(); }, 120); };
     document.addEventListener('focusin', onIn);
     document.addEventListener('focusout', onOut);
-    return () => { clearTimeout(t); document.removeEventListener('focusin', onIn); document.removeEventListener('focusout', onOut); document.body.classList.remove('typing'); };
+    return () => { clearTimeout(t); stop(); document.removeEventListener('focusin', onIn); document.removeEventListener('focusout', onOut); };
   }, []);
 
   // ----- toasts -----
@@ -322,6 +332,8 @@ export default function App() {
     setView(v);
     window.scrollTo({ top: 0 });
   };
+  // Back in the menu bar: the open page's own Back, or Home from Scan, Team, Admin and Account.
+  const tabBack = view === 'contacts' ? back : { run: () => go('contacts') };
 
   const waitingInvites = invites.filter((i) => !later.has(`invite:${i.workspace_id}`));
   const waiting = incoming.filter((s) => !later.has(s.id));
@@ -405,7 +417,7 @@ export default function App() {
         <main id="main" className="main" tabIndex={-1}>{main}</main>
 
         <nav className="tabbar" aria-label="Main">
-          {back && <TabbarItem icon="chevronLeft" label="Back" onClick={() => { back.run(); window.scrollTo(0, 0); }} />}
+          {tabBack && <TabbarItem icon="chevronLeft" label="Back" onClick={() => { tabBack.run(); window.scrollTo(0, 0); }} />}
           <TabbarItem icon="cards" label="Home" active={view === 'contacts'} onClick={() => go('contacts')} />
           {isSuper && <TabbarItem icon="users" label="Team" active={view === 'team'} onClick={() => go('team')} />}
           <button
