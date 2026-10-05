@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context.js';
 import { cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
 import CardCropper from './CardCropper.jsx';
-import { blankDraft, draftFromScan, findSameName, fromDraft, overwritePatch } from '../contactModel.js';
+import MultiScan from './MultiScan.jsx';
+import { blankDraft, draftFromScan, findSameName, fromDraft } from '../contactModel.js';
+import { saveNewCard, updateCardFromScan } from '../saveCard.js';
 import { findDuplicates } from '../filters.js';
 import { canWrite } from '../perms.js';
 import ContactForm from './ContactForm.jsx';
@@ -21,6 +23,7 @@ export default function Scan() {
   const [keepBoth, setKeepBoth] = useState(''); // id of a same-name card the user chose not to update
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [multi, setMulti] = useState(false); // several cards in one photo
 
   const row = useMemo(() => fromDraft(draft), [draft]);
   // A save problem or question must be seen: bring it into view when it appears.
@@ -87,6 +90,7 @@ export default function Scan() {
     const dirty = front || back || hasContent;
     if (dirty && !window.confirm('Start a new card with this photo? The card you were working on has not been saved and will be cleared.')) return;
     if (dirty) reset();
+    setMulti(false);
     startCrop(file, 'Front', true);
   }, [quickShot]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -104,6 +108,8 @@ export default function Scan() {
       </div>
     );
   }
+
+  if (multi) return <MultiScan onSingle={() => setMulti(false)} />;
 
   const read = async (frontImg = front, backImg = back) => {
     if (!frontImg) return;
@@ -146,36 +152,13 @@ export default function Scan() {
     }
     setPendingSave(false);
     setSaving(true);
-    let contact;
+    let contact, failures;
     try {
-      contact = await api.insertContact({
-        ...row,
-        workspace_id: workspace.id,
-        created_by: uid,
-        is_private: true,
-      });
+      ({ contact, failures } = await saveNewCard(api, { row, workspaceId: workspace.id, uid, photos: { front, back } }));
     } catch (e) {
       setSaveError(e.message);
       setSaving(false);
       return;
-    }
-    // Photos after the row exists (storage RLS checks the contact).
-    const patch = {};
-    const failures = [];
-    for (const [side, img] of [['front', front], ['back', back]]) {
-      if (!img) continue;
-      try {
-        patch[`${side}_path`] = await api.uploadCardPhoto(workspace.id, contact.id, side, img.blob);
-      } catch (e) {
-        failures.push(`${side} photo: ${e.message}`);
-      }
-    }
-    if (Object.keys(patch).length) {
-      try {
-        contact = (await api.updateContact(contact.id, patch)) || contact;
-      } catch (e) {
-        failures.push(e.message);
-      }
     }
     upsertContact(contact);
     setSaving(false);
@@ -191,27 +174,14 @@ export default function Scan() {
   const updateExisting = async (target) => {
     setSaveError('');
     setSaving(true);
-    const patch = overwritePatch(target, row);
-    const failures = [];
-    const replaced = [];
-    for (const [side, img] of [['front', front], ['back', back]]) {
-      if (!img) continue;
-      try {
-        patch[`${side}_path`] = await api.uploadCardPhoto(workspace.id, target.id, side, img.blob);
-        if (target[`${side}_path`]) replaced.push(target[`${side}_path`]);
-      } catch (e) {
-        failures.push(`${side} photo: ${e.message}`);
-      }
-    }
-    let updated;
+    let updated, failures;
     try {
-      updated = Object.keys(patch).length ? await api.updateContact(target.id, patch) : target;
+      ({ contact: updated, failures } = await updateCardFromScan(api, { target, row, workspaceId: workspace.id, photos: { front, back } }));
     } catch (e) {
       setSaveError(e.message);
       setSaving(false);
       return;
     }
-    if (replaced.length) api.removeStorageObjects('cards', replaced).catch(() => {});
     if (updated) upsertContact(updated);
     setSaving(false);
     const name = target.full_name || 'the contact';
@@ -237,7 +207,14 @@ export default function Scan() {
       )}
       <div className="page-head">
         <h1 className="h1">Scan card</h1>
-        <p className="muted">Add the front (and back, if it has details), then let Nomiqo read it, or type the details yourself.</p>
+        <p className="muted">
+          Add the front (and back, if it has details), then let Nomiqo read it, or type the details yourself.
+          {aiRead && <>{' '}<button type="button" className="link" onClick={() => {
+            if ((front || back || hasContent) && !window.confirm('Switch to several cards? The card you were working on has not been saved and will be cleared.')) return;
+            reset();
+            setMulti(true);
+          }}>Several cards in one photo?</button></>}
+        </p>
       </div>
 
       <div className="scan-grid">

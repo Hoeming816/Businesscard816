@@ -406,6 +406,31 @@ export async function scanCard(front) {
   };
 }
 
+export async function scanCards(photo) {
+  needFeature('scan_ai', 'AI card reading');
+  await sleep(1800);
+  if (!photo) throw new Error('A photo is required.');
+  const base = await scanCard(photo);
+  const card = (over) => ({ ...base, opportunities: [], tags: [], ...over });
+  return [
+    { ...base, box: { left: 0.04, top: 0.06, width: 0.44, height: 0.4 } },
+    card({
+      full_name: 'Priya Raman', job_title: 'Procurement Manager', company: 'Harbour Logistics Sdn Bhd', department: 'Procurement',
+      emails: ['priya.raman@harbourlog.example.com'], phones: [{ label: 'Mobile', number: '+60 12 555 0192' }, { label: 'Office', number: '+60 3 5555 0100' }],
+      website: 'www.harbourlog.example.com', address: '12 Jalan Pelabuhan, Port Klang', city: 'Port Klang', region: 'Selangor', country: 'Malaysia',
+      industry: 'Logistics', business_category: 'End User', job_function: 'Procurement', seniority: 'Manager',
+      card_text: 'HARBOUR LOGISTICS\nPriya Raman\nProcurement Manager', box: { left: 0.52, top: 0.06, width: 0.44, height: 0.4 },
+    }),
+    card({
+      full_name: 'Lim Kok Wah (林国华)', job_title: 'Project Engineer', company: 'Brightline M&E Pte Ltd', department: '',
+      emails: ['kw.lim@brightline.example.com'], phones: [{ label: 'Mobile', number: '+65 9555 7310' }],
+      website: '', address: '', city: 'Singapore', region: '', country: 'Singapore',
+      industry: 'Construction', business_category: 'Subcontractor', job_function: 'Engineering', seniority: 'Staff',
+      card_text: 'BRIGHTLINE M&E\nLim Kok Wah 林国华\nProject Engineer', box: { left: 0.04, top: 0.54, width: 0.44, height: 0.4 },
+    }),
+  ];
+}
+
 export async function listInteractions(contactId) {
   await tick();
   const c = db.contacts.find((x) => x.id === contactId);

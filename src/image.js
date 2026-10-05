@@ -1,6 +1,7 @@
 // Client-side image preparation: resize to max 1600 px (longest side) JPEG.
 
 import { cardOutputSize, detectCard, fallbackQuad, warpQuad } from './cardcrop.js';
+import { boxToRect, quadFitsBox, usableBox } from './multiScan.js';
 
 export const MAX_SIDE = 1600;
 const QUALITY = 0.85;
@@ -129,8 +130,8 @@ export async function cropToCard(canvas, quad) {
 }
 
 /** The whole photo, resized, for when the person skips cropping. */
-export async function wholePhoto(canvas) {
-  const size = fitWithin(canvas.width, canvas.height);
+export async function wholePhoto(canvas, max = MAX_SIDE) {
+  const size = fitWithin(canvas.width, canvas.height, max);
   const out = document.createElement('canvas');
   out.width = size.width;
   out.height = size.height;
@@ -144,4 +145,35 @@ export async function cropSquare(canvas, { sx, sy, size }, out = 512) {
   c.width = c.height = Math.min(out, Math.round(size));
   c.getContext('2d').drawImage(canvas, sx, sy, size, size, 0, 0, c.width, c.height);
   return canvasResult(c);
+}
+
+/** A plain rectangle of `canvas`, resized to fit MAX_SIDE. */
+async function cropRect(canvas, { x, y, width, height }) {
+  const size = fitWithin(width, height);
+  const out = document.createElement('canvas');
+  out.width = size.width;
+  out.height = size.height;
+  out.getContext('2d').drawImage(canvas, x, y, width, height, 0, 0, size.width, size.height);
+  return canvasResult(out);
+}
+
+/**
+ * One card out of a photo of several: look for the card's edges around the
+ * reader's box and straighten it; otherwise cut out the box with a margin.
+ * Returns null when the box is unusable (the card is then saved without a photo).
+ */
+export async function cropCardAt(canvas, box) {
+  if (!usableBox(box)) return null;
+  const tight = boxToRect(box, canvas.width, canvas.height);
+  const area = boxToRect(box, canvas.width, canvas.height, 0.2);
+  const sub = document.createElement('canvas');
+  sub.width = area.width;
+  sub.height = area.height;
+  sub.getContext('2d').drawImage(canvas, area.x, area.y, area.width, area.height, 0, 0, area.width, area.height);
+  const found = findCard(sub);
+  const quad = found && found.map(([x, y]) => [x + area.x, y + area.y]);
+  if (quadFitsBox(quad, tight)) {
+    try { return await cropToCard(canvas, quad); } catch { /* fall back to the box */ }
+  }
+  return cropRect(canvas, boxToRect(box, canvas.width, canvas.height, 0.04));
 }

@@ -8,6 +8,7 @@ import Timeline from './Timeline.jsx';
 import SharePanel from './SharePanel.jsx';
 import CardCropper from './CardCropper.jsx';
 import FaceCropper from './FaceCropper.jsx';
+import { saveToPhoneContacts } from '../vcard.js';
 import { cropSquare, cropToCard, fallbackQuad, findCard, loadPhoto, wholePhoto } from '../image.js';
 import { Modal, Icon, Pill, Tabs, ConfirmButton, CopyButton, Spinner, SaveLabel, useJustSaved, formatDate, initials } from './ui.jsx';
 
@@ -365,6 +366,9 @@ export default function ContactDetail({ contact, onClose, initialTab = 'details'
                   <Icon name="check" size={16} /> {contact.last_contacted_on === today ? 'Contacted today' : 'Log contact today'}
                 </button>
               )}
+              <button type="button" className="btn btn-outline" onClick={() => saveToPhoneContacts(contact)}>
+                <Icon name="download" size={16} /> Save to Phone Contacts
+              </button>
               {editable && can('share') && (
                 <button type="button" className={`btn btn-outline ${sharing ? 'has-active' : ''}`} aria-expanded={sharing} onClick={() => setSharing((v) => !v)}>
                   <Icon name="send" size={16} /> Share
