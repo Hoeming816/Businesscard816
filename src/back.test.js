@@ -16,4 +16,17 @@ describe('menu bar Back', () => {
     offSection();
     expect(currentBack()).toBe(null);
   });
+
+  it('keeps a section underneath a page inside it, whichever registered first', () => {
+    const page = vi.fn();
+    const section = vi.fn();
+    const offPage = pushBack({ run: page, level: 1 });
+    const offSection = pushBack({ run: section, level: 0 });
+    currentBack().run();
+    expect(page).toHaveBeenCalledTimes(1);
+    offPage();
+    currentBack().run();
+    expect(section).toHaveBeenCalledTimes(1);
+    offSection();
+  });
 });

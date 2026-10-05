@@ -40,7 +40,7 @@ export default function Home() {
     try { if (v) sessionStorage.setItem(SECTION_KEY, v); else sessionStorage.removeItem(SECTION_KEY); } catch { /* private mode */ }
   };
   const inSection = picker && sections.some((s) => s.value === section);
-  useBack(() => setSection(null), inSection);
+  useBack(() => setSection(null), inSection, 0); // under any page inside the section
   if (!picker) return <div className="home"><Contacts /></div>;
 
   if (!inSection) {
