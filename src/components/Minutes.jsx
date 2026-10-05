@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context.js';
-import { allActions, hasMinutes, isMinutes, joinAudioParts, minutesColumns, normaliseMinutes, onDate } from '../minutes.js';
+import { PART_SEC, allActions, hasMinutes, isMinutes, joinAudioParts, minutesColumns, normaliseMinutes, onDate } from '../minutes.js';
 import { MEETING_TYPES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
@@ -8,6 +8,7 @@ import ContactDetail from './ContactDetail.jsx';
 import Recorder, { useSpeechLanguage } from './Recorder.jsx';
 import { Entry, useEntryActions } from './Timeline.jsx';
 import { useBack } from '../back.js';
+import { isWebm, splitWebm } from '../webmSplit.js';
 import MeetingView, { MinutesLanguage } from './MeetingView.jsx';
 import { Icon, EmptyState, Spinner, ConfirmButton, Pill, formatDate, formatDuration } from './ui.jsx';
 
@@ -306,6 +307,34 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
   };
   const onRecorded = (r) => { setLast(r); save(r); };
 
+  // A recording made elsewhere, or downloaded from a recording that could not be saved.
+  // WebM files (Chrome, Edge, Android) of any length are cut into parts; others must fit in one.
+  const [reading, setReading] = useState(false);
+  const addFile = async (file) => {
+    if (!file) return;
+    setErr('');
+    setReading(true);
+    try {
+      let parts;
+      let duration;
+      let ext = 'webm';
+      if (await isWebm(file)) {
+        ({ parts, duration } = await splitWebm(file, PART_SEC));
+      } else {
+        if (file.size > 24 * 1024 * 1024) throw new Error('This file is too big to add in one piece. Long recordings can be added as .webm files, which is what Chrome and Edge record.');
+        const named = (/\.(\w+)$/.exec(file.name) || [])[1]?.toLowerCase();
+        ext = ['mp3', 'mp4', 'm4a', 'wav', 'ogg', 'mpeg', 'mpga'].includes(named) ? named : /mp4|aac|m4a/.test(file.type) ? 'mp4' : 'webm';
+        duration = await audioDuration(file);
+        parts = [{ blob: file, duration }];
+      }
+      onRecorded({ parts: parts.map((x) => ({ ...x, url: URL.createObjectURL(x.blob) })), ext, duration, liveTranscript: '' });
+    } catch (e) {
+      setErr(e.message || 'This file could not be read.');
+    } finally {
+      setReading(false);
+    }
+  };
+
   if (!type) {
     return (
       <div className="panel meeting-recorder">
@@ -355,8 +384,16 @@ function MeetingRecorder({ contacts, onCancel, onSaved }) {
             {saving ? <span className="small muted"><Spinner /> {progress || 'Saving recording…'}</span>
               : <button type="button" className="btn btn-outline btn-sm" onClick={() => save(last)}>Try saving again</button>}
           </div>
+        ) : reading ? (
+          <span className="small muted"><Spinner /> Reading the file…</span>
         ) : (
-          <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} />
+          <>
+            <Recorder onRecorded={onRecorded} lang={lang} setLang={setLang} />
+            <label className="btn btn-ghost btn-sm add-recording-file">
+              <Icon name="upload" size={14} /> Add a recording file
+              <input type="file" accept="audio/*,.webm,.m4a,.mp3,.wav" hidden onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); }} />
+            </label>
+          </>
         )}
         {err && <p className="form-error" role="alert">{err}</p>}
       </div>
@@ -445,4 +482,17 @@ function FollowUps({ items, byId, onChanged, onOpen }) {
       )}
     </div>
   );
+}
+
+/** Length of an audio file in seconds, from its metadata (1 if the browser can't tell). */
+function audioDuration(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const a = new Audio();
+    const done = (d) => { URL.revokeObjectURL(url); resolve(Number.isFinite(d) && d > 0 ? Math.round(d) : 1); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => done(a.duration);
+    a.onerror = () => done(0);
+    a.src = url;
+  });
 }

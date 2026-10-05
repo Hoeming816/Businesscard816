@@ -1543,3 +1543,4 @@ button.transcript-line:hover, button.transcript-line:focus-visible { background:
   .topic-strip { grid-template-columns: 1fr 1fr; }
   .note-thumb { width: 56px; }
 }
+.add-recording-file { display: inline-flex; width: auto; justify-self: start; align-self: flex-start; margin-top: 8px; cursor: pointer; }
