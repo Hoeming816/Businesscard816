@@ -3,8 +3,9 @@ import { useApp } from '../context.js';
 import { INTERACTION_KINDS, LEAD_STATUSES } from '../taxonomy.js';
 import { todayISO } from '../filters.js';
 import { canEditInteraction } from '../perms.js';
-import { clock, earlierActions, isMinutes, meetingTimes, minutesColumns, minutesLanguage, minutesRow, normaliseMinutes, outstanding, recordedAt, shareOrCopy, shareText } from '../minutes.js';
+import { PART_SEC, audioParts, clock, earlierActions, isMinutes, meetingTimes, minutesColumns, minutesLanguage, minutesRow, normaliseMinutes, outstanding, recordedAt, shareOrCopy, shareText } from '../minutes.js';
 import { Icon, Spinner, ConfirmButton, SaveLabel, useJustSaved, formatDate, formatDuration, EmptyState } from './ui.jsx';
+import RecordingAudio from './RecordingAudio.jsx';
 
 const KIND_ICON = { Meeting: 'users', Call: 'phone', 'Site visit': 'pin', Email: 'mail', Message: 'cards', Note: 'edit' };
 
@@ -97,7 +98,7 @@ export function useEntryActions({ reload, contactFor }) {
 
   const removeRecording = async (i) => {
     try {
-      await api.removeStorageObjects('recordings', [i.audio_path]);
+      await api.removeStorageObjects('recordings', audioParts(i));
       await api.updateInteraction(i.id, { audio_path: null, duration_sec: null });
       await reload();
       toast('Recording deleted');
@@ -107,6 +108,21 @@ export function useEntryActions({ reload, contactFor }) {
   };
 
   const [stage, setStage] = useState(''); // what making minutes is doing now, for the button
+
+  // A long recording is several files: transcribe each and put the timed lines back in order.
+  const transcribeRecording = async (i, output) => {
+    const parts = audioParts(i);
+    const texts = [];
+    let segments;
+    for (let k = 0; k < parts.length; k++) {
+      setStage(parts.length > 1 ? `Transcribing part ${k + 1} of ${parts.length}…` : 'Transcribing…');
+      const ext = (/\.(\w+)$/.exec(parts[k]) || [])[1] || 'webm';
+      const r = await api.transcribe(await api.downloadRecording(parts[k]), null, ext, output);
+      if (r.text) texts.push(r.text);
+      if (Array.isArray(r.segments)) segments = [...(segments || []), ...r.segments.map((x) => ({ ...x, t: (x.t || 0) + k * PART_SEC }))];
+    }
+    return { text: texts.join('\n'), segments };
+  };
 
   // A typed meeting: recording -> timed transcript -> minutes (Claude), saved on the meeting itself.
   const makeMeetingMinutes = async (i, contact) => {
@@ -120,10 +136,8 @@ export function useEntryActions({ reload, contactFor }) {
       await api.updateInteraction(i.id, { transcript, segments });
     }
     if (i.audio_path && !Array.isArray(segments)) {
-      setStage('Transcribing…');
       try {
-        const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-        const r = await api.transcribe(await api.downloadRecording(i.audio_path), null, ext, output);
+        const r = await transcribeRecording(i, output);
         if (r.text) ({ text: transcript, segments } = r);
       } catch (e) {
         if (e.code !== 'not_configured') throw e;
@@ -195,8 +209,7 @@ export function useEntryActions({ reload, contactFor }) {
       let transcript = i.transcript || '';
       if (!transcript) {
         try {
-          const ext = (/\.(\w+)$/.exec(i.audio_path) || [])[1] || 'webm';
-          transcript = (await api.transcribe(await api.downloadRecording(i.audio_path), null, ext, minutesLanguage())).text;
+          transcript = (await transcribeRecording(i, minutesLanguage())).text;
         } catch (e) {
           if (e.code !== 'not_configured') throw e;
           if (!i.notes) {
@@ -252,9 +265,6 @@ export function useEntryActions({ reload, contactFor }) {
 const formatDateTime = (d) => d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, onDeleteRecording, making, busy, onMakeMinutes, onShare }) {
-  const { ensureSigned, signed } = useApp();
-  useEffect(() => { if (i.audio_path) ensureSigned('recordings', [i.audio_path]); }, [i.audio_path, ensureSigned]);
-  const audio = i.audio_path ? signed('recordings', i.audio_path) : null;
   return (
     <li className={`entry kind-${i.kind.replace(/\s/g, '-').toLowerCase()}${isMinutes(i) ? ' entry-minutes' : ''}`}>
       <span className="entry-icon" aria-hidden="true"><Icon name={KIND_ICON[i.kind] || 'edit'} size={16} /></span>
@@ -293,7 +303,7 @@ export function Entry({ i, author, canEdit, canMakeMinutes, onEdit, onDelete, on
               <Icon name="mic" size={13} /> Recorded {recordedAt(i) ? formatDateTime(recordedAt(i)) : ''}
               {i.duration_sec != null && <span className="mono muted"> · {formatDuration(i.duration_sec)}</span>}
             </span>
-            {audio ? <audio controls preload="none" src={audio} aria-label={`Recording, ${formatDuration(i.duration_sec)}`} /> : <span className="muted small">Loading recording…</span>}
+            <RecordingAudio paths={audioParts(i)} duration={i.duration_sec} preload="none" />
             {canEdit && canMakeMinutes && (
               <button type="button" className="btn btn-outline btn-sm" onClick={onMakeMinutes} disabled={busy}>
                 {making ? <><Spinner /> Making minutes…</> : <><Icon name="sparkles" size={14} /> Make minutes with AI</>}
@@ -338,9 +348,6 @@ function InteractionEditor({ contact, existing, onCancel, onSaved }) {
   const [suggest, setSuggest] = useState(null); // { follow_up_on, lead_status }
   const [apply, setApply] = useState(true);
   const [saving, setSaving] = useState(false);
-  const { ensureSigned, signed } = useApp();
-
-  useEffect(() => { if (existing?.audio_path) ensureSigned('recordings', [existing.audio_path]); }, [existing, ensureSigned]);
 
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
@@ -413,8 +420,6 @@ function InteractionEditor({ contact, existing, onCancel, onSaved }) {
     }
   };
 
-  const existingAudio = existing?.audio_path ? signed('recordings', existing.audio_path) : null;
-
   return (
     <form className="editor panel" onSubmit={save} aria-label={existing ? 'Edit entry' : 'New entry'}>
       <div className="grid-3">
@@ -439,10 +444,10 @@ function InteractionEditor({ contact, existing, onCancel, onSaved }) {
       </div>
 
       {/* New recordings can no longer be made from Notes & meetings; earlier ones stay playable. */}
-      {existingAudio && (
+      {existing?.audio_path && (
         <div className="field">
           <span className="label">Recording</span>
-          <div className="entry-audio"><audio controls src={existingAudio} aria-label="Saved recording" /></div>
+          <div className="entry-audio"><RecordingAudio paths={audioParts(existing)} duration={existing.duration_sec} label="Saved recording" /></div>
         </div>
       )}
 

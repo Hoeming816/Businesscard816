@@ -2,10 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { SPEECH_LANGUAGES } from '../taxonomy.js';
 import { load, save } from '../storage.js';
 import { Icon, formatDuration } from './ui.jsx';
+import { PART_SEC } from '../recordingParts.js';
 
 const LANG_KEY = 'cardfile.speechLang';
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/aac'];
 const STOP_GRACE_MS = 2500; // if the browser never fires "stop", finish with what was captured
+// Speech needs little: a lower bitrate keeps files small. Long meetings are recorded
+// in parts of PART_SEC, each a complete file of its own (storage and transcription
+// both limit the size of one file; an 8-hour meeting at the default rate was too big).
+const BITRATE = 48000;
 
 // Safari (iPhone, iPad and Mac) shares one microphone between recording and live
 // speech recognition; running both can silence the recording and stop it from
@@ -38,7 +43,7 @@ export function useSpeechLanguage() {
 /**
  * Records a conversation. Shows the consent reminder before every recording,
  * a timer, an input level meter and (where supported) a live transcript.
- * onRecorded({ blob, ext, duration, url, liveTranscript })
+ * onRecorded({ parts: [{ blob, url, duration }], ext, duration, liveTranscript })
  */
 export default function Recorder({ onRecorded, lang, setLang, autoStart = false }) {
   const [phase, setPhase] = useState(autoStart ? 'consent' : 'idle'); // idle | consent | starting | recording | stopping
@@ -53,6 +58,7 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
     if (r.raf) cancelAnimationFrame(r.raf);
     if (r.timer) clearInterval(r.timer);
     if (r.stopTimer) clearTimeout(r.stopTimer);
+    if (r.partTimer) clearTimeout(r.partTimer);
     if (r.recognition) { r.stopRecognition = true; try { r.recognition.stop(); } catch { /* ignore */ } }
     if (r.stream) r.stream.getTracks().forEach((t) => t.stop());
     if (r.audioCtx) r.audioCtx.close().catch(() => {});
@@ -70,32 +76,67 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
       if (rec.current !== pending) { stream.getTracks().forEach((t) => t.stop()); return; } // cancelled while starting
       const mime = pickMime();
-      const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-      const chunks = [];
-      const r = { stream, mr, chunks, startedAt: Date.now(), finalText: '' };
+      const opts = { audioBitsPerSecond: BITRATE, ...(mime ? { mimeType: mime } : {}) };
+      const r = { stream, parts: [], startedAt: Date.now(), finalText: '' };
       rec.current = r;
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      let type = (mime || 'audio/webm').split(';')[0];
+
+      // One part: its own MediaRecorder. When it stops it is kept, and unless the
+      // whole recording is stopping, the next part starts on the same microphone.
+      const closePart = (part) => {
+        if (part.closed) return;
+        part.closed = true;
+        clearTimeout(r.partTimer);
+        const blob = new Blob(part.chunks, { type });
+        if (blob.size) r.parts.push({ blob, duration: Math.max(1, Math.round(((part.endedAt || Date.now()) - part.startedAt) / 1000)) });
+      };
+      const startPart = () => {
+        let mr;
+        try { mr = new MediaRecorder(stream, opts); } catch { mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
+        const part = { mr, chunks: [], startedAt: Date.now() };
+        r.part = part;
+        r.mr = mr;
+        mr.ondataavailable = (e) => { if (e.data && e.data.size) part.chunks.push(e.data); };
+        const onEnd = () => {
+          if (rec.current !== r) return; // recording was abandoned (closed mid-way)
+          type = (mr.mimeType || type).split(';')[0];
+          part.endedAt = part.endedAt || Date.now();
+          closePart(part);
+          if (r.stopping || r.done) { r.finish(); return; }
+          try { startPart(); } catch { r.finish(); }
+        };
+        mr.onstop = onEnd;
+        mr.onerror = onEnd;
+        // Safari's chunked recording can produce files that won't play; record in one piece there.
+        if (isAppleWebKit) mr.start(); else mr.start(1000);
+        r.partTimer = setTimeout(() => {
+          part.endedAt = Date.now();
+          try { if (mr.state !== 'inactive') mr.stop(); } catch { onEnd(); }
+        }, PART_SEC * 1000);
+      };
+
       // Runs once, from "stop", from the grace timer, or when the microphone goes away.
       r.finish = () => {
         if (r.done) return;
         r.done = true;
-        const type = (mr.mimeType || mime || 'audio/webm').split(';')[0];
-        const blob = new Blob(chunks, { type });
+        if (r.part) closePart(r.part);
+        const parts = r.parts.map((p) => ({ ...p, url: URL.createObjectURL(p.blob) }));
         const duration = Math.max(1, Math.round(((r.stoppedAt || Date.now()) - r.startedAt) / 1000));
         const liveTranscript = r.finalText.trim();
         cleanup();
         setPhase('idle');
-        if (!blob.size) {
+        if (!parts.length) {
           setError('Nothing was recorded. Check that Nomiqo may use the microphone, then try again.');
           return;
         }
-        onRecorded({ blob, ext: extFor(type), duration, url: URL.createObjectURL(blob), liveTranscript });
+        onRecorded({ parts, ext: extFor(type), duration, liveTranscript });
       };
-      mr.onstop = () => r.finish();
-      mr.onerror = () => r.finish();
-      stream.getAudioTracks().forEach((t) => t.addEventListener('ended', () => { if (mr.state !== 'inactive') { try { mr.stop(); } catch { r.finish(); } } }));
-      // Safari's chunked recording can produce files that won't play; record in one piece there.
-      if (isAppleWebKit) mr.start(); else mr.start(1000);
+      stream.getAudioTracks().forEach((t) => t.addEventListener('ended', () => {
+        r.stopping = true;
+        const mr = r.mr;
+        if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch { r.finish(); } } else r.finish();
+      }));
+      startPart();
 
       // Level meter
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -157,6 +198,9 @@ export default function Recorder({ onRecorded, lang, setLang, autoStart = false 
     const r = rec.current;
     if (!r.mr) { cleanup(); setPhase('idle'); return; }
     r.stoppedAt = Date.now();
+    r.stopping = true;
+    if (r.part) r.part.endedAt = r.stoppedAt;
+    if (r.partTimer) clearTimeout(r.partTimer);
     setPhase('stopping');
     if (r.timer) clearInterval(r.timer);
     if (r.recognition) { r.stopRecognition = true; try { r.recognition.stop(); } catch { /* ignore */ } }
