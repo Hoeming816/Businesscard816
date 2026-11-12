@@ -1,9 +1,9 @@
 import { Icon, Modal, formatDate } from './ui.jsx';
 import { ReminderList } from './TaskReminders.jsx';
 
-/** Everything waiting for me (to-do reminders, invitations, shared cards) plus answers to cards I shared. */
-export default function Notifications({ invites, shares, replies, reminders, seenAt, onOpen, onClose }) {
-  const waiting = invites.length + shares.length;
+/** Everything waiting for me (sign-ups to approve, to-do reminders, invitations, shared cards) plus answers to cards I shared. */
+export default function Notifications({ signups = [], onReviewSignups, invites, shares, replies, reminders, seenAt, onOpen, onClose }) {
+  const waiting = signups.length + invites.length + shares.length;
   return (
     <Modal labelledBy="notif-title" onClose={onClose} className="notifications">
       <div className="notif-bar">
@@ -24,6 +24,16 @@ export default function Notifications({ invites, shares, replies, reminders, see
       <h3 className="notif-head">Waiting for you</h3>
       {waiting ? (
         <ul className="notif-list">
+          {signups.map((u) => (
+            <li key={`u-${u.id}`}>
+              <span className="incoming-icon" aria-hidden="true"><Icon name="user" size={18} /></span>
+              <span className="grow">
+                <strong>{u.full_name || u.username}</strong> <span className="mono small muted">@{u.username}</span> signed up and is waiting for approval.
+                <span className="block muted small">{formatDate(u.created_at)}</span>
+              </span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={onReviewSignups}>Review</button>
+            </li>
+          ))}
           {invites.map((i) => (
             <li key={`i-${i.workspace_id}`}>
               <span className="incoming-icon" aria-hidden="true"><Icon name="users" size={18} /></span>

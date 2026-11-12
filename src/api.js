@@ -729,6 +729,29 @@ export async function adminListProfiles() {
   return out;
 }
 
+/** Sign-ups waiting for the super admin, oldest first. */
+export async function listPendingSignups() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, created_at')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  fail(error);
+  return data || [];
+}
+
+/** Approve a sign-up: the account works from its next sign-in. */
+export async function approveSignup(userId) {
+  const { error } = await supabase.rpc('approve_signup', { p_user: userId });
+  fail(error);
+}
+
+/** Reject a sign-up: the account is erased and the username is free again. */
+export async function rejectSignup(userId) {
+  const { error } = await supabase.rpc('reject_signup', { p_user: userId });
+  fail(error);
+}
+
 /** action: 'suspend' | 'reinstate' | 'reset_password' | 'delete' (to Deleted users) | 'purge'; extra: { reason?, password?, confirm_username? } */
 export async function adminUserAction(action, userId, extra = {}) {
   await invoke('admin-users', { action, user_id: userId, ...extra });

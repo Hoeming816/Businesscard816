@@ -367,6 +367,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .ac-line.w40 { width: 40%; }
 .ac-line.w75 { width: 75%; background: var(--accent); opacity: .7; }
 .suspended-icon { width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; background: var(--danger-soft); color: var(--danger); }
+.suspended-icon.pending-icon { background: var(--accent-soft); color: var(--accent); }
 .reason {
   margin: 4px 0; padding: 12px 14px; width: 100%; text-align: left;
   border-left: 3px solid var(--danger); background: var(--surface-2); border-radius: 0 8px 8px 0;
@@ -1131,6 +1132,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .deleted-user-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .deleted-user .inline-form { flex-wrap: wrap; }
 .admin-tabs { overflow-x: auto; scrollbar-width: none; }
+.admin-tabs .tab { white-space: nowrap; }
 @media (max-width: 480px) { .admin-tabs .tab { padding-left: 8px; padding-right: 8px; gap: 5px; } }
 
 /* Typed meetings: meeting type picker and the six AI outputs */

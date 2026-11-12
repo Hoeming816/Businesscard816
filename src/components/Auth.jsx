@@ -90,7 +90,7 @@ export default function AuthScreen({ onSuspended }) {
         <p className="muted auth-sub">
           {mode === 'signin'
             ? 'Scan, file and follow up on every business card your team collects.'
-            : 'You get your own workspace straight away. Invite colleagues later from Team.'}
+            : 'Every new account is checked by the Nomiqo administrator. You can sign in once it is approved.'}
         </p>
         {api.isDemo && (
           <p className="notice notice-info"><span>Demo mode with sample data: any password works. Sign in as <strong>alex.tan</strong>, or try <strong>jun.delacruz</strong> to see a suspended account.</span></p>
@@ -158,6 +158,20 @@ export default function AuthScreen({ onSuspended }) {
           )}
         </p>
         <p className="help auth-foot">Forgot your password? Ask your Nomiqo administrator to reset it.</p>
+      </div>
+    </div>
+  );
+}
+
+export function PendingScreen({ onBack }) {
+  return (
+    <div className="auth auth-single">
+      <div className="auth-panel center">
+        <div className="suspended-icon pending-icon"><Icon name="clock" size={28} /></div>
+        <h1 className="auth-title">Waiting for approval</h1>
+        <p className="muted">Thanks for signing up. Your Nomiqo account needs to be approved by the administrator before you can use it.</p>
+        <p className="help">Try signing in again later. If it is urgent, contact your Nomiqo administrator.</p>
+        <button type="button" className="btn btn-ghost" onClick={onBack}><Icon name="chevronLeft" size={16} /> Back to sign in</button>
       </div>
     </div>
   );

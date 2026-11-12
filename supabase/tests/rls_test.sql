@@ -36,6 +36,9 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000d', 'dave@u',  '{"username":"dave","full_name":"Dave Outsider"}'),
   ('00000000-0000-0000-0000-00000000000e', 'hoeming816@u', '{"username":"hoeming816","full_name":"Sam Super"}');
 update public.profiles set is_super_admin = true where username = 'hoeming816';
+select pg_temp.ok((select status from public.profiles where username = 'hoeming816') = 'active', 'hoeming816 never waits for approval');
+select pg_temp.ok((select count(*) from public.profiles where status = 'pending') = 4, 'new sign-ups wait for approval');
+update public.profiles set status = 'active' where status = 'pending'; -- approved (approve_signup is tested below)
 select pg_temp.fails($$update public.profiles set is_super_admin = true where username = 'alice'$$, 'only hoeming816 can ever be super admin, even from the SQL editor');
 update public.profiles set features = '{"meeting": true}' where not is_super_admin; -- meeting is off by default (tested below)
 
@@ -442,6 +445,44 @@ select pg_temp.ok(not exists (select 1 from public.notes), 'owner deletes their 
 delete from public.note_topics where id = '61000000-0000-0000-0000-000000000001';
 select pg_temp.ok(not exists (select 1 from public.note_topics), 'owner deletes their topic');
 
+-- ---------------------------------------------------------------- sign-up approval
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000f1', 'pat@u', '{"username":"pat","full_name":"Pat Pending"}'),
+  ('00000000-0000-0000-0000-0000000000f2', 'rex@u', '{"username":"rex","full_name":"Rex Rejected"}');
+select id as ws_pat from public.workspaces where owner_id = '00000000-0000-0000-0000-0000000000f1' \gset
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000f1', false);
+select pg_temp.ok((select status from public.profiles where id = auth.uid()) = 'pending', 'a new sign-up sees it is waiting for approval');
+select pg_temp.ok((select count(*) from public.profiles) = 1, 'a pending account sees only its own profile');
+select pg_temp.ok(not exists (select 1 from public.workspaces) and not exists (select 1 from public.workspace_members), 'a pending account sees no workspace');
+select pg_temp.fails($$insert into public.contacts (workspace_id, full_name) values ('$$ || :'ws_pat' || $$', 'X')$$, 'a pending account cannot save a card');
+select pg_temp.fails($$insert into public.notes (body) values ('x')$$, 'a pending account cannot save a note');
+select pg_temp.fails($$insert into public.tasks (title) values ('x')$$, 'a pending account cannot save a task');
+select pg_temp.fails($$insert into storage.objects (bucket_id, name) values ('cards', '$$ || :'ws_pat' || $$/x/y.jpg')$$, 'a pending account cannot upload files');
+select pg_temp.fails($$update public.profiles set status = 'active' where id = auth.uid()$$, 'a pending account cannot approve itself');
+select pg_temp.fails($$select public.approve_signup(auth.uid())$$, 'a pending account cannot call approve');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select pg_temp.fails($$select public.approve_signup('00000000-0000-0000-0000-0000000000f1')$$, 'a regular user cannot approve sign-ups');
+select pg_temp.fails($$select public.reject_signup('00000000-0000-0000-0000-0000000000f2')$$, 'a regular user cannot reject sign-ups');
+select pg_temp.ok(public.username_available('pat') is false, 'a pending sign-up holds its username');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000e', false);
+select pg_temp.ok((select count(*) from public.profiles where status = 'pending') = 2, 'super admin sees pending sign-ups');
+select public.approve_signup('00000000-0000-0000-0000-0000000000f1');
+select pg_temp.fails($$select public.approve_signup('00000000-0000-0000-0000-0000000000f1')$$, 'a sign-up is answered once');
+select public.reject_signup('00000000-0000-0000-0000-0000000000f2');
+select pg_temp.fails($$select public.reject_signup('00000000-0000-0000-0000-00000000000a')$$, 'reject only works on pending sign-ups');
+reset role;
+select pg_temp.ok(not exists (select 1 from auth.users where id = '00000000-0000-0000-0000-0000000000f2')
+                  and not exists (select 1 from public.profiles where username = 'rex')
+                  and not exists (select 1 from public.workspaces where owner_id = '00000000-0000-0000-0000-0000000000f2'),
+                  'reject erases the login, profile and workspace');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000f1', false);
+select pg_temp.ok(exists (select 1 from public.workspaces where id = :'ws_pat'), 'an approved account sees its workspace');
+insert into public.contacts (workspace_id, full_name) values (:'ws_pat', 'First card');
+select pg_temp.ok((select count(*) from public.contacts) = 1, 'an approved account can save cards');
+
 -- ---------------------------------------------------------------- anon
 reset role;
 set role anon;
@@ -453,5 +494,6 @@ select pg_temp.fails($$select count(*) from public.card_shares$$, 'anon cannot r
 select pg_temp.fails($$select count(*) from public.tasks$$, 'anon cannot read tasks');
 select pg_temp.fails($$select count(*) from public.notes$$, 'anon cannot read notes');
 select pg_temp.fails($$select public.accept_card_share('30000000-0000-0000-0000-000000000002')$$, 'anon cannot accept shares');
+select pg_temp.fails($$select public.approve_signup('00000000-0000-0000-0000-0000000000f1')$$, 'anon cannot approve sign-ups');
 reset role;
 \echo 'ALL RLS TESTS PASSED'

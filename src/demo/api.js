@@ -87,6 +87,11 @@ const emit = () => listeners.forEach((cb) => cb(db.session ? { ...db.session } :
 export async function signIn(username) {
   await sleep(300);
   const p = db.profiles.find((x) => x.username === username.trim().toLowerCase()) || profile(ME);
+  if (p.status === 'pending') {
+    db.session = { id: p.id }; // the app sees the pending profile and shows the waiting screen
+    emit();
+    return { ...db.session };
+  }
   if (p.status !== 'active') {
     const err = new Error('Access suspended');
     err.suspended = true;
@@ -101,7 +106,8 @@ export async function signUp({ username, full_name }) {
   await sleep(300);
   if (!(await usernameAvailable(username))) throw new Error('That username is taken.');
   const id = newId('u');
-  db.profiles.push({ id, username: username.toLowerCase(), full_name, is_super_admin: false, status: 'active', suspended_reason: null, created_at: now() });
+  // New accounts wait for the super admin, as in the real app.
+  db.profiles.push({ id, username: username.toLowerCase(), full_name, is_super_admin: false, status: 'pending', suspended_reason: null, created_at: now() });
   const ws = { id: newId('w'), name: `${full_name}'s cards`, owner_id: id, status: 'active', created_at: now() };
   db.workspaces.push(ws);
   db.members.push({ workspace_id: ws.id, user_id: id, role: 'admin', status: 'active', created_at: now() });
@@ -865,6 +871,30 @@ export async function adminSetFeatures(userId, features) {
   if (!p) throw new Error('No such account.');
   p.features = clone(features);
   return { id: p.id, features: clone(p.features) };
+}
+export async function listPendingSignups() {
+  await tick();
+  if (!profile(uid())?.is_super_admin) return [];
+  return clone(db.profiles.filter((p) => p.status === 'pending')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map(({ id, username, full_name, created_at }) => ({ id, username, full_name, created_at })));
+}
+export async function approveSignup(userId) {
+  await sleep(250);
+  requireSuper();
+  const p = profile(userId);
+  if (!p || p.status !== 'pending') throw new Error('This sign-up was already answered.');
+  p.status = 'active';
+}
+export async function rejectSignup(userId) {
+  await sleep(250);
+  requireSuper();
+  const p = profile(userId);
+  if (!p || p.status !== 'pending') throw new Error('This sign-up was already answered.');
+  const owned = new Set(db.workspaces.filter((w) => w.owner_id === userId).map((w) => w.id));
+  db.profiles = db.profiles.filter((x) => x.id !== userId);
+  db.workspaces = db.workspaces.filter((w) => !owned.has(w.id));
+  db.members = db.members.filter((m) => m.user_id !== userId && !owned.has(m.workspace_id));
 }
 export async function adminUserAction(action, userId, extra = {}) {
   await sleep(300);
