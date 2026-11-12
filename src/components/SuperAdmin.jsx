@@ -4,7 +4,7 @@ import { memberStatus } from './Team.jsx';
 import { ConfirmButton, Icon, Pill, Spinner, Tabs, formatDate } from './ui.jsx';
 import { FEATURES, featureDefault, featureOn } from '../features.js';
 
-export default function SuperAdmin({ initialTab = 'accounts', onSignupsChanged }) {
+export default function SuperAdmin({ initialTab = 'accounts', pendingKey = '', onSignupsChanged }) {
   const { api, toast } = useApp();
   const [tab, setTab] = useState(initialTab);
   const [profiles, setProfiles] = useState(null);
@@ -21,7 +21,8 @@ export default function SuperAdmin({ initialTab = 'accounts', onSignupsChanged }
       setError(e.message);
     }
   }, [api]);
-  useEffect(() => { loadAll(); }, [loadAll]);
+  // Reload when the list of waiting sign-ups changes (checked every minute, and by Refresh).
+  useEffect(() => { loadAll(); }, [loadAll, pendingKey]);
 
   const live = profiles ? profiles.filter((p) => p.status !== 'deleted' && p.status !== 'pending') : null;
   const deleted = profiles ? profiles.filter((p) => p.status === 'deleted') : null;
