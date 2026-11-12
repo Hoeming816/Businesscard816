@@ -5,7 +5,7 @@ import { load, save } from './storage.js';
 import { canWrite } from './perms.js';
 import { featureOn } from './features.js';
 import { Icon, Logo, Avatar, Spinner } from './components/ui.jsx';
-import AuthScreen, { SuspendedScreen } from './components/Auth.jsx';
+import AuthScreen, { PendingScreen, SuspendedScreen } from './components/Auth.jsx';
 import Home, { resetHomeSection } from './components/Home.jsx';
 import Scan from './components/Scan.jsx';
 import { switcherLabel, workspaceLabel } from './workspaceLabel.js';
@@ -48,6 +48,8 @@ export default function App() {
   const [incoming, setIncoming] = useState([]);
   // Teams that invited me; answered before any card offers.
   const [invites, setInvites] = useState([]);
+  const [signups, setSignups] = useState([]); // super admin: sign-ups waiting for approval
+  const [adminTab, setAdminTab] = useState(null); // opens the Super admin page on a tab
   // Answers to cards I shared, for the notifications list.
   const [replies, setReplies] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -127,7 +129,8 @@ export default function App() {
         if (!alive) return;
         if (!p) throw new Error('Your profile could not be loaded.');
         if (p.status !== 'active') {
-          setSuspended({ reason: p.suspended_reason || '' });
+          // Not approved yet, or suspended/deleted: the database refuses everything, so sign out.
+          setSuspended(p.status === 'pending' ? { pending: true } : { reason: p.suspended_reason || '' });
           await api.signOut();
           return;
         }
@@ -199,6 +202,14 @@ export default function App() {
     if (profile) loadIncoming();
     else { setIncoming([]); setInvites([]); setReplies([]); }
   }, [profile?.id, loadIncoming]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadSignups = useCallback(async () => {
+    try { setSignups(await api.listPendingSignups()); } catch { /* the bell is best-effort */ }
+  }, []);
+  useEffect(() => {
+    if (profile?.is_super_admin) loadSignups();
+    else setSignups([]);
+  }, [profile?.id, profile?.is_super_admin, loadSignups]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todoOn = featureOn(profile, 'todo');
   const reloadTasks = useCallback(async () => {
@@ -306,6 +317,9 @@ export default function App() {
     reloadContacts, upsertContact, removeContact, memberName, toast, view, switchWorkspace, reloadWorkspaces, signed, ensureSigned, signedVersion]);
 
   // ----- render -----
+  if (suspended?.pending) {
+    return <PendingScreen onBack={() => setSuspended(null)} />;
+  }
   if (suspended) {
     return <SuspendedScreen reason={suspended.reason} onBack={() => setSuspended(null)} />;
   }
@@ -328,8 +342,9 @@ export default function App() {
     // Nomiqo is a personal app: team pages are for the super admin only.
     ...(isSuper ? [{ value: 'team', label: 'Team', icon: 'users' }, { value: 'admin', label: 'Super admin', icon: 'shield' }] : []),
   ];
-  const go = (v) => {
+  const go = (v, tab = null) => {
     setView(v);
+    setAdminTab(tab);
     window.scrollTo({ top: 0 });
   };
   // Back in the menu bar: the open page's own Back, or Home from Scan, Team, Admin and Account.
@@ -340,7 +355,7 @@ export default function App() {
   const invite = chosen ? (chosen.kind === 'invite' ? invites.find((i) => i.workspace_id === chosen.id) : null) : waitingInvites[0];
   const offer = chosen ? (chosen.kind === 'share' ? incoming.find((s) => s.id === chosen.id) : null) : (invite ? null : waiting[0]);
   const unseenReplies = replies.filter((r) => r.responded_at && r.responded_at > seenAt).length;
-  const bellCount = invites.length + incoming.length + unseenReplies + reminders.active.length;
+  const bellCount = signups.length + invites.length + incoming.length + unseenReplies + reminders.active.length;
   const openNotifications = () => {
     setNotifOpen(true);
     const at = new Date().toISOString();
@@ -356,7 +371,7 @@ export default function App() {
     main = <NoWorkspace onMe={() => go('me')} />;
   } else if (view === 'scan') main = <Scan key={workspace.id} />;
   else if (view === 'team' && isSuper) main = <Team key={workspace.id} />;
-  else if (view === 'admin' && isSuper) main = <SuperAdmin />;
+  else if (view === 'admin' && isSuper) main = <SuperAdmin key={adminTab || 'admin'} initialTab={adminTab || undefined} onSignupsChanged={loadSignups} />;
   else if (view === 'me') main = <Me />;
   else main = <Home key={workspace.id} />;
 
@@ -454,6 +469,8 @@ export default function App() {
       </div>
       {notifOpen && (
         <Notifications
+          signups={signups}
+          onReviewSignups={() => { closeNotifications(); go('admin', 'approvals'); }}
           invites={invites}
           shares={incoming}
           replies={replies}

@@ -4,9 +4,9 @@ import { memberStatus } from './Team.jsx';
 import { ConfirmButton, Icon, Pill, Spinner, Tabs, formatDate } from './ui.jsx';
 import { FEATURES, featureDefault, featureOn } from '../features.js';
 
-export default function SuperAdmin() {
+export default function SuperAdmin({ initialTab = 'accounts', onSignupsChanged }) {
   const { api, toast } = useApp();
-  const [tab, setTab] = useState('accounts');
+  const [tab, setTab] = useState(initialTab);
   const [profiles, setProfiles] = useState(null);
   const [workspaces, setWorkspaces] = useState(null);
   const [error, setError] = useState('');
@@ -23,8 +23,9 @@ export default function SuperAdmin() {
   }, [api]);
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const live = profiles ? profiles.filter((p) => p.status !== 'deleted') : null;
+  const live = profiles ? profiles.filter((p) => p.status !== 'deleted' && p.status !== 'pending') : null;
   const deleted = profiles ? profiles.filter((p) => p.status === 'deleted') : null;
+  const pending = profiles ? profiles.filter((p) => p.status === 'pending').sort((a, b) => a.created_at.localeCompare(b.created_at)) : null;
   const counts = profiles && workspaces ? {
     accounts: live.length,
     active: profiles.filter((p) => p.status === 'active').length,
@@ -51,6 +52,7 @@ export default function SuperAdmin() {
         value={tab}
         onChange={setTab}
         tabs={[
+          { value: 'approvals', label: 'Approvals', icon: 'check', badge: pending?.length || null },
           { value: 'accounts', label: 'Accounts', icon: 'user' },
           { value: 'workspaces', label: 'Workspaces', icon: 'building' },
           { value: 'deleted', label: `Deleted${deleted?.length ? ` (${deleted.length})` : ''}`, icon: 'trash' },
@@ -58,6 +60,7 @@ export default function SuperAdmin() {
       />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="tabpanel">
         {!profiles ? <div className="loading-block"><Spinner /> Loading…</div>
+          : tab === 'approvals' ? <Approvals profiles={pending} reload={async () => { await loadAll(); onSignupsChanged?.(); }} toast={toast} />
           : tab === 'accounts' ? <Accounts profiles={live} reload={loadAll} toast={toast} />
             : tab === 'deleted' ? <DeletedUsers profiles={deleted} reload={loadAll} toast={toast} />
               : <Workspaces workspaces={workspaces} reload={loadAll} toast={toast} />}
@@ -207,6 +210,55 @@ function Accounts({ profiles, reload, toast }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+/** New sign-ups: they can't use Nomiqo until approved here. */
+function Approvals({ profiles, reload, toast }) {
+  const { api } = useApp();
+  const [busy, setBusy] = useState(null); // profile id
+
+  const answer = async (p, approve) => {
+    setBusy(p.id);
+    try {
+      if (approve) await api.approveSignup(p.id);
+      else await api.rejectSignup(p.id);
+      toast(approve ? `@${p.username} approved. They can sign in now.` : `Sign-up from @${p.username} rejected`);
+      await reload();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!profiles.length) {
+    return <p className="muted">No sign-ups are waiting. When someone creates an account, it appears here and they can't use Nomiqo until you approve it.</p>;
+  }
+  return (
+    <>
+      <p className="help">These people signed up and are waiting for you. Until you approve them they can't sign in or see anything. Rejecting erases the account, so the username is free again.</p>
+      <ul className="deleted-users approvals">
+        {profiles.map((p) => (
+          <li key={p.id} className="deleted-user">
+            <div className="deleted-user-head">
+              <span><strong>{p.full_name || '—'}</strong> <span className="mono small muted">@{p.username}</span></span>
+              <span className="small muted">Signed up {formatDate(p.created_at)}</span>
+            </div>
+            <div className="deleted-user-actions">
+              <button type="button" className="btn btn-primary btn-sm" disabled={!!busy} onClick={() => answer(p, true)}>
+                <Icon name="check" size={14} /> {busy === p.id ? 'Saving…' : 'Approve'}
+              </button>
+              <ConfirmButton className="btn btn-danger-ghost btn-sm" icon="x" disabled={!!busy}
+                confirmLabel="Reject" message={`Reject @${p.username}? Their account is erased and they can't sign in.`}
+                onConfirm={() => answer(p, false)}>
+                Reject
+              </ConfirmButton>
+            </div>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

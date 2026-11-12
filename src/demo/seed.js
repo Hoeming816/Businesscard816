@@ -13,6 +13,8 @@ export const PROFILES = [
   { id: 'u-jun', username: 'jun.delacruz', full_name: 'Jun Dela Cruz', is_super_admin: false, status: 'suspended', suspended_reason: 'Left the company. Access cancelled at the request of Northbridge Networks.', created_at: '2026-02-20T08:00:00Z' },
   { id: 'u-weiling', username: 'weiling.goh', full_name: 'Wei Ling Goh', is_super_admin: false, status: 'active', suspended_reason: null, created_at: '2026-05-11T10:30:00Z' },
   { id: 'u-ahmad', username: 'ahmad.r', full_name: 'Ahmad Razak', is_super_admin: false, status: 'active', suspended_reason: null, created_at: '2026-08-22T04:45:00Z' },
+  // Signed up and waiting for the super admin (Super admin > Approvals).
+  { id: 'u-daniel', username: 'daniel.lee', full_name: 'Daniel Lee', is_super_admin: false, status: 'pending', suspended_reason: null, created_at: '2026-11-11T07:15:00Z' },
 ];
 
 export const WORKSPACES = [
@@ -23,6 +25,7 @@ export const WORKSPACES = [
   { id: 'w-jun', name: "Jun Dela Cruz's cards", owner_id: 'u-jun', status: 'suspended', created_at: '2026-02-20T08:00:00Z' },
   { id: 'w-weiling', name: 'Goh Engineering', owner_id: 'u-weiling', status: 'active', created_at: '2026-05-11T10:30:00Z' },
   { id: 'w-ahmad', name: "Ahmad Razak's cards", owner_id: 'u-ahmad', status: 'active', created_at: '2026-08-22T04:45:00Z' },
+  { id: 'w-daniel', name: "Daniel Lee's cards", owner_id: 'u-daniel', status: 'active', created_at: '2026-11-11T07:15:00Z' },
 ];
 
 export const MEMBERS = [
@@ -38,6 +41,7 @@ export const MEMBERS = [
   { workspace_id: 'w-weiling', user_id: 'u-weiling', role: 'admin', status: 'active', created_at: '2026-05-11T10:30:00Z' },
   { workspace_id: 'w-weiling', user_id: 'u-ahmad', role: 'viewer', status: 'revoked', created_at: '2026-08-23T10:30:00Z' },
   { workspace_id: 'w-ahmad', user_id: 'u-ahmad', role: 'admin', status: 'active', created_at: '2026-08-22T04:45:00Z' },
+  { workspace_id: 'w-daniel', user_id: 'u-daniel', role: 'admin', status: 'active', created_at: '2026-11-11T07:15:00Z' },
 ];
 
 // name, title, company, dept, domain, industry, type, category, function, seniority,
