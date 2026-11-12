@@ -206,9 +206,14 @@ export default function App() {
   const loadSignups = useCallback(async () => {
     try { setSignups(await api.listPendingSignups()); } catch { /* the bell is best-effort */ }
   }, []);
+  // New sign-ups can arrive at any time: check every minute and whenever the app comes back to the front.
   useEffect(() => {
-    if (profile?.is_super_admin) loadSignups();
-    else setSignups([]);
+    if (!profile?.is_super_admin) { setSignups([]); return undefined; }
+    loadSignups();
+    const id = setInterval(loadSignups, 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') loadSignups(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, [profile?.id, profile?.is_super_admin, loadSignups]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todoOn = featureOn(profile, 'todo');
@@ -248,12 +253,13 @@ export default function App() {
         if (latest && latest !== current) { window.location.reload(); return; }
       }
       setLater(new Set());
-      await Promise.all([reloadWorkspaces().catch(() => {}), reloadContacts(), reloadMembers(), loadIncoming(), todoOn ? reloadTasks() : null]);
+      await Promise.all([reloadWorkspaces().catch(() => {}), reloadContacts(), reloadMembers(), loadIncoming(), todoOn ? reloadTasks() : null,
+        profile?.is_super_admin ? loadSignups() : null]);
       toast('Up to date.');
     } finally {
       setRefreshing(false);
     }
-  }, [reloadWorkspaces, reloadContacts, reloadMembers, loadIncoming, toast, todoOn, reloadTasks]);
+  }, [reloadWorkspaces, reloadContacts, reloadMembers, loadIncoming, toast, todoOn, reloadTasks, profile?.is_super_admin, loadSignups]);
 
   const upsertContact = useCallback((c, removedId) => {
     setContacts((list) => {
@@ -371,7 +377,7 @@ export default function App() {
     main = <NoWorkspace onMe={() => go('me')} />;
   } else if (view === 'scan') main = <Scan key={workspace.id} />;
   else if (view === 'team' && isSuper) main = <Team key={workspace.id} />;
-  else if (view === 'admin' && isSuper) main = <SuperAdmin key={adminTab || 'admin'} initialTab={adminTab || undefined} onSignupsChanged={loadSignups} />;
+  else if (view === 'admin' && isSuper) main = <SuperAdmin key={adminTab || 'admin'} initialTab={adminTab || undefined} pendingKey={signups.map((s) => s.id).join()} onSignupsChanged={loadSignups} />;
   else if (view === 'me') main = <Me />;
   else main = <Home key={workspace.id} />;
 
