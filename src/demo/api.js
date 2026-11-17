@@ -951,6 +951,37 @@ export async function adminListWorkspaces() {
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
+const DAY_MS = 86400000;
+/** Demo usage: active days come from what each person created, plus a few made-up days. */
+export async function adminUsage() {
+  await tick();
+  requireSuper();
+  const t = Date.now();
+  const ago = (iso) => (t - new Date(iso).getTime()) / DAY_MS;
+  return db.profiles
+    .filter((p) => p.status !== 'pending')
+    .map((p, i) => {
+      const mine = db.contacts.filter((c) => c.created_by === p.id);
+      const days = new Set(mine.map((c) => (c.created_at || '').slice(0, 10)));
+      for (let d = 0; d < 30; d += 2 + i) days.add(new Date(t - d * DAY_MS).toISOString().slice(0, 10));
+      const list = [...days].filter(Boolean).sort();
+      const within = (n) => list.filter((d) => ago(`${d}T23:59:59Z`) < n).length;
+      return {
+        user_id: p.id, username: p.username, full_name: p.full_name, status: p.status, is_super_admin: p.is_super_admin,
+        created_at: p.created_at, last_sign_in_at: new Date(t - i * 3 * DAY_MS).toISOString(),
+        last_active_on: list[list.length - 1] || null,
+        active_days_7: within(7), active_days_30: within(30),
+        cards_total: mine.length,
+        cards_7: mine.filter((c) => ago(c.created_at) < 7).length,
+        cards_30: mine.filter((c) => ago(c.created_at) < 30).length,
+        meetings_total: db.interactions.filter((x) => x.created_by === p.id && x.kind === 'Meeting').length,
+        tasks_total: db.tasks.filter((x) => x.created_by === p.id).length,
+        notes_total: db.notes.filter((x) => x.created_by === p.id).length,
+      };
+    })
+    .sort((a, b) => a.username.localeCompare(b.username));
+}
+export async function recordActivity() {}
 export async function adminSetWorkspaceStatus(id, status) {
   await tick();
   requireSuper();

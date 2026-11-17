@@ -54,6 +54,7 @@ export default function SuperAdmin({ initialTab = 'accounts', onSignupsChanged }
         tabs={[
           { value: 'approvals', label: 'Approvals', icon: 'check', badge: pending?.length || null },
           { value: 'accounts', label: 'Accounts', icon: 'user' },
+          { value: 'usage', label: 'Usage', icon: 'history' },
           { value: 'workspaces', label: 'Workspaces', icon: 'building' },
           { value: 'deleted', label: `Deleted${deleted?.length ? ` (${deleted.length})` : ''}`, icon: 'trash' },
         ]}
@@ -62,6 +63,7 @@ export default function SuperAdmin({ initialTab = 'accounts', onSignupsChanged }
         {!profiles ? <div className="loading-block"><Spinner /> Loading…</div>
           : tab === 'approvals' ? <Approvals profiles={pending} reload={async () => { await loadAll(); onSignupsChanged?.(); }} toast={toast} />
           : tab === 'accounts' ? <Accounts profiles={live} reload={loadAll} toast={toast} />
+          : tab === 'usage' ? <Usage />
             : tab === 'deleted' ? <DeletedUsers profiles={deleted} reload={loadAll} toast={toast} />
               : <Workspaces workspaces={workspaces} reload={loadAll} toast={toast} />}
       </div>
@@ -212,6 +214,149 @@ function Accounts({ profiles, reload, toast }) {
       </div>
     </>
   );
+}
+
+/** How often someone used Nomiqo, from the days they opened it in the last 30. */
+export function usageFrequency(activeDays30) {
+  const n = Number(activeDays30) || 0;
+  if (n >= 15) return { label: 'Daily', tone: 'ok' };
+  if (n >= 4) return { label: 'Weekly', tone: 'accent' };
+  if (n >= 1) return { label: 'Now and then', tone: 'neutral' };
+  return { label: 'Not in 30 days', tone: 'danger' };
+}
+
+const USAGE_SORTS = {
+  cards: { label: 'Most cards', by: (a, b) => b.cards_total - a.cards_total },
+  active: { label: 'Most active', by: (a, b) => b.active_days_30 - a.active_days_30 || (b.last_active_on || '').localeCompare(a.last_active_on || '') },
+  recent: { label: 'Last active', by: (a, b) => (b.last_active_on || '').localeCompare(a.last_active_on || '') },
+  name: { label: 'Username', by: (a, b) => a.username.localeCompare(b.username) },
+};
+
+/** Per-account usage: how many cards each person added and how often they use Nomiqo. Counts only. */
+function Usage() {
+  const { api } = useApp();
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState('');
+  const [sort, setSort] = useState('cards');
+  const [q, setQ] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api.adminUsage()
+      .then((r) => { if (alive) { setRows(r.map(numeric)); setError(''); } })
+      .catch((e) => { if (alive) setError(e.message); });
+    return () => { alive = false; };
+  }, [api]);
+
+  const list = useMemo(() => {
+    if (!rows) return [];
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return rows
+      .filter((r) => showDeleted || r.status !== 'deleted')
+      .filter((r) => words.every((w) => `${r.username} ${r.full_name}`.toLowerCase().includes(w)))
+      .sort(USAGE_SORTS[sort].by);
+  }, [rows, q, sort, showDeleted]);
+
+  if (error) {
+    return <p className="notice notice-error" role="alert">Usage could not be loaded: {error}</p>;
+  }
+  if (!rows) return <div className="loading-block"><Spinner /> Loading…</div>;
+
+  const shown = rows.filter((r) => showDeleted || r.status !== 'deleted');
+  const totals = {
+    cards: shown.reduce((n, r) => n + r.cards_total, 0),
+    cards30: shown.reduce((n, r) => n + r.cards_30, 0),
+    active7: shown.filter((r) => r.active_days_7 > 0).length,
+    active30: shown.filter((r) => r.active_days_30 > 0).length,
+  };
+
+  return (
+    <>
+      <p className="help">How many cards each person has added and how often they open Nomiqo. Only counts and dates are shown, never what is on a card.</p>
+      <div className="stats usage-stats">
+        <div className="stat"><span className="stat-value mono">{totals.cards}</span><span className="stat-label">Cards in total</span></div>
+        <div className="stat"><span className="stat-value mono">{totals.cards30}</span><span className="stat-label">Cards added, last 30 days</span></div>
+        <div className="stat"><span className="stat-value mono">{totals.active7}</span><span className="stat-label">People active, last 7 days</span></div>
+        <div className="stat"><span className="stat-value mono">{totals.active30}</span><span className="stat-label">People active, last 30 days</span></div>
+      </div>
+      <div className="usage-tools">
+        <div className="input-icon search admin-search">
+          <Icon name="search" size={16} />
+          <input type="search" placeholder="Search username or name" aria-label="Search usage" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <label className="usage-sort">
+          <span className="small muted">Sort by</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            {Object.entries(USAGE_SORTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </label>
+        <label className="usage-deleted small">
+          <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Include deleted users
+        </label>
+      </div>
+      <div className="table-wrap">
+        <table className="table usage-table">
+          <thead>
+            <tr>
+              <th scope="col">Account</th>
+              <th scope="col">Cards</th>
+              <th scope="col">How often</th>
+              <th scope="col">Last active</th>
+              <th scope="col">Last sign-in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((r) => {
+              const f = usageFrequency(r.active_days_30);
+              return (
+                <tr key={r.user_id} className={r.status !== 'active' ? 'is-inactive' : ''}>
+                  <td>
+                    <span className="cell-main">{r.full_name || '—'} {r.is_super_admin && <Pill tone="accent" icon="shield">Super admin</Pill>}</span>
+                    <span className="mono small muted">@{r.username}</span>
+                    {r.status !== 'active' && <span className="small muted block">{r.status === 'deleted' ? 'Deleted' : 'Suspended'}</span>}
+                  </td>
+                  <td data-label="Cards">
+                    <span className="mono cell-main">{r.cards_total}</span>
+                    <span className="small muted block">+{r.cards_30} in 30 days{r.cards_7 ? `, +${r.cards_7} in 7` : ''}</span>
+                  </td>
+                  <td data-label="How often">
+                    <Pill tone={f.tone}>{f.label}</Pill>
+                    <span className="small muted block">{r.active_days_30} of 30 days · {r.active_days_7} of 7 days</span>
+                    {(r.meetings_total || r.tasks_total || r.notes_total) ? (
+                      <span className="small muted block">{[
+                        r.meetings_total && `${r.meetings_total} meeting${r.meetings_total === 1 ? '' : 's'}`,
+                        r.tasks_total && `${r.tasks_total} task${r.tasks_total === 1 ? '' : 's'}`,
+                        r.notes_total && `${r.notes_total} note${r.notes_total === 1 ? '' : 's'}`,
+                      ].filter(Boolean).join(' · ')}</span>
+                    ) : null}
+                  </td>
+                  <td className="small" data-label="Last active">{r.last_active_on ? daysAgo(r.last_active_on) : 'Never'}</td>
+                  <td className="small" data-label="Last sign-in">{r.last_sign_in_at ? formatDate(r.last_sign_in_at) : 'Never'}</td>
+                </tr>
+              );
+            })}
+            {!list.length && <tr><td colSpan={5} className="muted center">No accounts match.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="help">"Last active" and "How often" count the days someone opened the app. Days before this was added are worked out from when they created cards, meetings, tasks and notes, and their last sign-in.</p>
+    </>
+  );
+}
+
+const NUMERIC = ['active_days_7', 'active_days_30', 'cards_total', 'cards_7', 'cards_30', 'meetings_total', 'tasks_total', 'notes_total'];
+const numeric = (r) => ({ ...r, ...Object.fromEntries(NUMERIC.map((k) => [k, Number(r[k]) || 0])) });
+
+/** "Today", "Yesterday", "5 days ago", or the date when it's further back. */
+export function daysAgo(day, today = new Date()) {
+  const t = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const d = Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
+  const n = Math.round((t - d) / 86400000);
+  if (n <= 0) return 'Today';
+  if (n === 1) return 'Yesterday';
+  if (n < 30) return `${n} days ago`;
+  return formatDate(`${day.slice(0, 10)}T12:00:00Z`);
 }
 
 /** New sign-ups: they can't use Nomiqo until approved here. */
@@ -431,7 +576,7 @@ function Workspaces({ workspaces, reload, toast }) {
           <thead>
             <tr>
               <th scope="col">Workspace</th><th scope="col">Owner</th><th scope="col" className="num">Members</th>
-              <th scope="col" className="num">Cards</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th>
+              <th scope="col">Cards</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

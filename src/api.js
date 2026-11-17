@@ -770,6 +770,22 @@ export async function adminListWorkspaces() {
   return data || [];
 }
 
+/** Per-account usage for the super admin: counts and dates only, never card content. */
+export async function adminUsage() {
+  const { data, error } = await supabase.rpc('super_admin_usage');
+  fail(error);
+  return data || [];
+}
+
+/** Notes that the signed-in user opened the app today (one row per day). Best effort. */
+export async function recordActivity() {
+  try {
+    await supabase.rpc('record_activity');
+  } catch {
+    // Usage stats are never worth an error on screen.
+  }
+}
+
 export async function adminSetWorkspaceStatus(id, status) {
   const { error } = await supabase.from('workspaces').update({ status }).eq('id', id);
   fail(error);
