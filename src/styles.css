@@ -851,6 +851,15 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 .stat-value { font-size: 30px; font-weight: 500; color: var(--ink); line-height: 1.1; }
 .stat-label { font-size: 13px; color: var(--ink-3); font-weight: 550; }
 .admin-search { max-width: 360px; }
+.usage-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0 14px; }
+.usage-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+.usage-tools .admin-search { flex: 1 1 220px; margin: 0; }
+.usage-sort { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.usage-sort select { min-height: 36px; }
+.usage-deleted { display: flex; align-items: center; gap: 6px; }
+.usage-table td { vertical-align: top; }
+.usage-table .pill { margin-bottom: 2px; }
+@media (max-width: 720px) { .usage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {

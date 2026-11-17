@@ -147,6 +147,22 @@ export default function App() {
     return () => { alive = false; };
   }, [user, resetSession, toast]);
 
+  // Usage stats for the super admin: note each day the app is opened or brought back to the front.
+  const profileId = profile?.id;
+  useEffect(() => {
+    if (!profileId) return undefined;
+    let last = '';
+    const note = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      if (document.visibilityState !== 'visible' || today === last) return;
+      last = today;
+      api.recordActivity();
+    };
+    note();
+    document.addEventListener('visibilitychange', note);
+    return () => document.removeEventListener('visibilitychange', note);
+  }, [profileId]);
+
   const workspace = useMemo(() => (workspaces || []).find((w) => w.id === wsId) || null, [workspaces, wsId]);
   const role = workspace?.role || null;
 
